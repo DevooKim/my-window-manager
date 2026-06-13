@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/icon-master.png" width="128" alt="My Window Manager icon">
+</p>
+
 # My Window Manager
 
 [English](README.md)
