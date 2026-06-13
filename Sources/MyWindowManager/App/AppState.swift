@@ -3,11 +3,17 @@ import AppKit
 
 @MainActor
 final class AppState: ObservableObject {
+    /// Scene id for the SwiftUI-owned settings window.
+    static let editorWindowID = "editor"
+
     @Published var openedEditor: EditorTab? = nil
     @Published var selectedTab: EditorTab = .presets
     @Published var showOnboarding: Bool = false
 
-    private var editorWindow: NSWindow?
+    /// Injected from the SwiftUI scene so AppKit-side callers (menu bar,
+    /// hotkeys) can open the editor window through SwiftUI's openWindow action.
+    var openEditorWindow: (() -> Void)?
+
     private var onboardingWindow: NSWindow?
 
     weak var store: ConfigStore?
@@ -19,57 +25,10 @@ final class AppState: ObservableObject {
     func openLayoutEditor() { openEditor(.layouts) }
 
     func openEditor(_ tab: EditorTab) {
-        guard let store, let catalog, let hotkeys else { return }
         selectedTab = tab
-        if let w = editorWindow {
-            // 이미 열려 있으면 창을 리사이즈하지 않고 선택만 전환.
-            w.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            return
-        }
-        let root = EditorRootView(selection: Binding(
-            get: { [weak self] in self?.selectedTab ?? .presets },
-            set: { [weak self] in self?.selectedTab = $0 }
-        ))
-        .environmentObject(store)
-        .environmentObject(catalog)
-        .environmentObject(hotkeys)
-        let host = NSHostingController(rootView: root)
-        let window = NSWindow(contentViewController: host)
-        window.title = ""
-        window.styleMask = [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView]
-        // 타이틀바를 숨기고 컨텐츠를 상단까지 확장 — 신호등 버튼이 사이드바
-        // 위에 떠 있는 BetterDisplay 스타일.
-        window.titlebarAppearsTransparent = true
-        window.titleVisibility = .hidden
-        window.titlebarSeparatorStyle = .none
-
-        // 단일 기본 크기(가장 큰 레이아웃 기준), 화면보다 크지 않게 클램프.
-        let visible = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame.size
-            ?? NSSize(width: 1280, height: 800)
-        let margin: CGFloat = 0.92
-        let defaultSize = NSSize(width: 980, height: 680)
-        let minSize = NSSize(width: 720, height: 520)
-        let content = NSSize(
-            width: min(defaultSize.width, visible.width * margin),
-            height: min(defaultSize.height, visible.height * margin)
-        )
-        window.contentMinSize = NSSize(
-            width: min(minSize.width, content.width),
-            height: min(minSize.height, content.height)
-        )
-        window.setContentSize(content)
-        window.center()
-        // 사용자가 조절한 크기를 재오픈/재실행 시 복원.
-        window.setFrameAutosaveName("MyWindowManagerEditor")
-        window.isReleasedWhenClosed = false
-        window.delegate = WindowCloseHandler.shared
-        WindowCloseHandler.shared.onClose = { [weak self] w in
-            if w == self?.editorWindow { self?.editorWindow = nil }
-            if w == self?.onboardingWindow { self?.onboardingWindow = nil }
-        }
-        editorWindow = window
-        window.makeKeyAndOrderFront(nil)
+        // 실제 윈도우 오픈은 SwiftUI scene이 담당한다. scene 쪽에서 주입한
+        // openWindow 액션을 호출하고, 앱을 전면으로 가져온다.
+        openEditorWindow?()
         NSApp.activate(ignoringOtherApps: true)
     }
 

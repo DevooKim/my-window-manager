@@ -15,6 +15,21 @@ struct MyWindowManagerApp: App {
                 .environmentObject(delegate.hotkeys)
         }
         .menuBarExtraStyle(.menu)
+
+        // 설정 창은 SwiftUI가 직접 소유하는 Window scene으로 연다. 이렇게 해야
+        // NavigationSplitView 사이드바 머티리얼이 타이틀바(신호등) 영역까지
+        // 정상적으로 채워진다 — 수동 NSWindow + NSHostingController에 욱여넣으면
+        // SwiftUI가 윈도우 통합을 못 잡아 머티리얼이 타이틀바 밑에서만 그려진다.
+        Window("My Window Manager", id: AppState.editorWindowID) {
+            EditorRootView()
+                .environmentObject(delegate.store)
+                .environmentObject(delegate.catalog)
+                .environmentObject(delegate.hotkeys)
+                .environmentObject(delegate.app)
+        }
+        .windowStyle(.hiddenTitleBar)
+        .windowResizability(.contentMinSize)
+        .defaultSize(width: 980, height: 680)
     }
 }
 

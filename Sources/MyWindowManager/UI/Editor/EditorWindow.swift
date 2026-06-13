@@ -41,11 +41,15 @@ enum EditorTab: String, CaseIterable, Identifiable {
 }
 
 struct EditorRootView: View {
-    @Binding var selection: EditorTab
+    @EnvironmentObject var app: AppState
+
+    private var selection: Binding<EditorTab> {
+        Binding(get: { app.selectedTab }, set: { app.selectedTab = $0 })
+    }
 
     var body: some View {
         NavigationSplitView {
-            List(EditorTab.allCases, selection: $selection) { tab in
+            List(EditorTab.allCases, selection: selection) { tab in
                 Label {
                     Text(tab.label)
                 } icon: {
@@ -54,23 +58,17 @@ struct EditorRootView: View {
                 }
                 .tag(tab)
             }
-            .safeAreaInset(edge: .top) {
-                // 신호등 버튼이 떠 있는 영역만큼 첫 항목 위로 여백을 확보해
-                // 버튼과 첫 항목이 겹치지 않게 한다.
-                Color.clear.frame(height: 28)
-            }
             .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 300)
         } detail: {
             detailView
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .navigationTitle("")
-                .toolbar(.hidden, for: .windowToolbar)
         }
     }
 
     @ViewBuilder
     private var detailView: some View {
-        switch selection {
+        switch app.selectedTab {
         case .presets: PresetEditorView()
         case .cycles: CycleEditorView()
         case .layouts: LayoutEditorView()

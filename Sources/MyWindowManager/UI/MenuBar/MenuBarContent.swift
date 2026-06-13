@@ -6,6 +6,7 @@ struct MenuBarContent: View {
     @EnvironmentObject var ax: AccessibilityManager
     @EnvironmentObject var app: AppState
     @EnvironmentObject var hotkeys: HotkeyRegistryHolder
+    @Environment(\.openWindow) private var openWindow
 
     // Cap how many of each kind show in the menu bar so it stays compact;
     // the full lists remain available in their editors.
@@ -15,6 +16,13 @@ struct MenuBarContent: View {
 
     var body: some View {
         Group {
+            // AppKit 경로(hotkey 등)에서도 설정 창을 열 수 있도록 SwiftUI의
+            // openWindow 액션을 AppState에 주입해 둔다.
+            Color.clear.frame(width: 0, height: 0)
+                .onAppear {
+                    app.openEditorWindow = { openWindow(id: AppState.editorWindowID) }
+                }
+
             Button("My Window Manager 정보") { showAbout() }
 
             Divider()
@@ -60,7 +68,9 @@ struct MenuBarContent: View {
 
             Button("업데이트 확인...") { Updater.checkForUpdates(silent: false) }
             Button {
-                app.openEditor(.presets)
+                app.selectedTab = .presets
+                openWindow(id: AppState.editorWindowID)
+                NSApp.activate(ignoringOtherApps: true)
             } label: {
                 Label("설정...", systemImage: "gearshape")
             }
