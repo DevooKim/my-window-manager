@@ -4,3 +4,5 @@ build/
 dist/
 *.xcodeproj
 .swiftpm/
+
+.superpowers/
