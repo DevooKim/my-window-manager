@@ -12,7 +12,7 @@ struct InfoView: View {
         VStack(spacing: 10) {
             Image(nsImage: NSApp.applicationIconImage)
                 .resizable()
-                .frame(width: 80, height: 80)
+                .frame(width: 160, height: 160)
             Text("My Window Manager")
                 .font(.title2.bold())
             Text("버전 \(Self.bundleString("CFBundleShortVersionString")) (\(Self.bundleString("CFBundleVersion")))")
@@ -21,7 +21,7 @@ struct InfoView: View {
                 Updater.checkForUpdates(silent: false)
             }
             .padding(.top, 4)
-            Link("github.com/DevooKim/my-window-manager",
+            Link("GitHub",
                  destination: URL(string: "https://github.com/DevooKim/my-window-manager")!)
             Text(Self.bundleString("NSHumanReadableCopyright"))
                 .font(.caption)

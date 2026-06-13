@@ -38,6 +38,15 @@ enum EditorTab: String, CaseIterable, Identifiable {
         case .info: return .green
         }
     }
+
+    /// 디테일 영역을 사이드바처럼 반투명(behind-window vibrancy)으로 그릴지.
+    /// 캔버스가 있는 프리셋·사이클·레이아웃은 가독성을 위해 불투명 유지.
+    var hasTranslucentDetail: Bool {
+        switch self {
+        case .info: return true
+        case .presets, .cycles, .layouts, .displays, .general: return false
+        }
+    }
 }
 
 struct EditorRootView: View {
@@ -62,17 +71,31 @@ struct EditorRootView: View {
             // 바탕화면이 비치게 한다.
             .scrollContentBackground(.hidden)
             .background(
-                VisualEffectView(material: .hudWindow, makesHostWindowTransparent: true)
-                    .ignoresSafeArea()
+                VisualEffectView(
+                    material: .hudWindow,
+                    state: .followsWindowActiveState,
+                    makesHostWindowTransparent: true
+                )
+                .ignoresSafeArea()
             )
             .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 300)
         } detail: {
             detailView
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .navigationTitle("")
-                // 창을 투명 처리하므로 디테일 영역은 불투명 윈도우 머티리얼을
-                // 깔아 가독성을 유지한다.
-                .background(VisualEffectView(material: .windowBackground).ignoresSafeArea())
+                // 창이 투명하므로 디테일 영역은 배경 머티리얼을 깐다. 투명 탭
+                // (정보)은 바탕이 잘 비치는 .hudWindow, 나머지는 불투명한
+                // .windowBackground으로 가독성 유지.
+                .background(
+                    VisualEffectView(
+                        material: app.selectedTab.hasTranslucentDetail ? .hudWindow : .windowBackground,
+                        // 창이 포커스를 잃으면 불투명해진다.
+                        state: .followsWindowActiveState,
+                        // 위에 얹힌 텍스트가 vibrancy로 흐려지지 않게.
+                        disablesVibrancy: true
+                    )
+                    .ignoresSafeArea()
+                )
         }
     }
 
