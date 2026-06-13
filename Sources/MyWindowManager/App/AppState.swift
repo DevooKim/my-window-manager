@@ -36,9 +36,13 @@ final class AppState: ObservableObject {
         .environmentObject(hotkeys)
         let host = NSHostingController(rootView: root)
         let window = NSWindow(contentViewController: host)
-        window.title = "My Window Manager"
-        window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
+        window.title = ""
+        window.styleMask = [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView]
+        // 타이틀바를 숨기고 컨텐츠를 상단까지 확장 — 신호등 버튼이 사이드바
+        // 위에 떠 있는 BetterDisplay 스타일.
         window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.titlebarSeparatorStyle = .none
 
         // 단일 기본 크기(가장 큰 레이아웃 기준), 화면보다 크지 않게 클램프.
         let visible = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame.size

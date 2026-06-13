@@ -54,10 +54,17 @@ struct EditorRootView: View {
                 }
                 .tag(tab)
             }
+            .safeAreaInset(edge: .top) {
+                // 신호등 버튼이 떠 있는 영역만큼 첫 항목 위로 여백을 확보해
+                // 버튼과 첫 항목이 겹치지 않게 한다.
+                Color.clear.frame(height: 28)
+            }
             .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 300)
         } detail: {
             detailView
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .navigationTitle("")
+                .toolbar(.hidden, for: .windowToolbar)
         }
     }
 
