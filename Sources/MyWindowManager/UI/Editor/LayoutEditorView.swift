@@ -33,12 +33,21 @@ struct LayoutEditorView: View {
                         .tag(layout.id as UUID?)
                     }
                 }
-                HStack {
-                    Button(action: addLayout) { Image(systemName: "plus") }
-                    Button(action: deleteLayout) { Image(systemName: "minus") }
-                        .disabled(selection == nil)
+                HStack(spacing: 2) {
+                    Button(action: addLayout) {
+                        Image(systemName: "plus")
+                            .frame(width: 24, height: 24)
+                            .contentShape(Rectangle())
+                    }
+                    Button(action: deleteLayout) {
+                        Image(systemName: "minus")
+                            .frame(width: 24, height: 24)
+                            .contentShape(Rectangle())
+                    }
+                    .disabled(selection == nil)
                     Spacer()
                 }
+                .buttonStyle(.borderless)
                 .padding(.horizontal, 8).padding(.bottom, 8)
             }
             .frame(minWidth: 200, idealWidth: 220, maxWidth: 260)

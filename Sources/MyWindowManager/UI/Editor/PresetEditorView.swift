@@ -53,15 +53,24 @@ struct PresetEditorView: View {
                     .tag(preset.id as UUID?)
                 }
             }
-            HStack {
-                Button(action: addPreset) { Image(systemName: "plus") }
-                Button(action: deletePreset) { Image(systemName: "minus") }
-                    .disabled(selection == nil)
+            HStack(spacing: 2) {
+                Button(action: addPreset) {
+                    Image(systemName: "plus")
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
+                }
+                Button(action: deletePreset) {
+                    Image(systemName: "minus")
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
+                }
+                .disabled(selection == nil)
                 Spacer()
             }
+            .buttonStyle(.borderless)
             .padding(.horizontal, 8).padding(.bottom, 8)
         }
-        .frame(minWidth: 220, idealWidth: 240)
+        .frame(minWidth: 220, idealWidth: 240, maxWidth: 280)
     }
 
     @ViewBuilder
