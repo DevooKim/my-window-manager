@@ -12,6 +12,18 @@
 
 ---
 
+## 구현 결과 — 계획 대비 변경점 (2026-06-13 완료)
+
+구현 중 아래 항목이 계획과 달라졌다. 모두 더 나은 방향으로 확정되었으며 코드/커밋에 반영됨.
+
+1. **설정 창을 수동 `NSWindow` → SwiftUI `Window` scene으로 변경 (Task 3 핵심 변경).** 계획은 `NSWindow(contentViewController:)`를 유지했으나, 그 방식에선 `NavigationSplitView` 사이드바 머티리얼이 타이틀바(신호등) 영역까지 채워지지 않았다(lldb로 머티리얼 높이가 창보다 타이틀바만큼 작음을 확인). App Store·메모처럼 SwiftUI가 윈도우를 소유하도록 `MyWindowManagerApp`에 `Window(id:)` scene을 추가하고 `.windowStyle(.hiddenTitleBar)`를 적용해 해결. `AppState.openEditor`는 NSWindow를 만들지 않고 `selectedTab`만 설정 후 `openWindow` 액션(MenuBarContent/AppState.openEditorWindow로 주입)을 호출한다. selection은 `@Binding`이 아니라 `AppState`(`@EnvironmentObject`)에서 받는다. 메모리: [[settings-window-must-be-swiftui-scene]].
+2. **사이드바·정보 탭 반투명 vibrancy 추가** (계획 범위 밖, 후속 요청). `VisualEffectView`(NSViewRepresentable) 신설 — behind-window vibrancy, `followsWindowActiveState`(비활성 시 불투명), `allowsVibrancy=false` 변형. 사이드바=`.hudWindow`, 정보 탭=`.hudWindow`, 나머지 탭=불투명 `.windowBackground`.
+3. **각 편집 뷰의 사소한 레이아웃 보정** (계획은 "무변경"이었으나 공용 디테일 환경에서 필요): `GeneralView`의 잔존 `.fixedSize` 제거, `LayoutEditorView` detail을 `maxHeight: .infinity`/top-leading로 고정, 프리셋·사이클·레이아웃 목록 열 `maxWidth` 제한 및 +/- 버튼을 borderless로 정리, `InfoView` 아이콘 확대·GitHub 링크 텍스트화.
+
+> 즉 아래 Task 3 코드 블록의 NSWindow 구현은 **초기 계획안**이며, 최종 코드는 위 1번대로 SwiftUI scene이다. 현재 소스를 기준으로 볼 것.
+
+---
+
 ### Task 1: `EditorTab`에 아이콘 메타데이터 추가 + 창 크기 속성 제거
 
 **Files:**
@@ -19,7 +31,7 @@
 
 이 태스크는 `EditorTab` enum만 수정한다. `preferredSize`/`minSize`를 제거하면 `AppState.swift`가 일시적으로 컴파일 에러가 나므로, 이 태스크의 빌드 검증은 Task 3 이후로 미룬다. (Task 1→2→3은 한 묶음으로 연속 실행.)
 
-- [ ] **Step 1: `EditorTab`에 symbol/tint 추가, preferredSize/minSize 제거**
+- [x] **Step 1: `EditorTab`에 symbol/tint 추가, preferredSize/minSize 제거**
 
 `EditorWindow.swift`의 `enum EditorTab { ... }` 블록(현재 3~41행) 전체를 아래로 교체:
 
@@ -69,7 +81,7 @@ enum EditorTab: String, CaseIterable, Identifiable {
 
 > 주: `label`의 한글/영문 혼용은 현행 유지 (스펙 범위 밖). `preferredSize`/`minSize`는 의도적으로 제거 — Task 3에서 창 크기 로직이 이를 더 이상 쓰지 않게 된다.
 
-- [ ] **Step 2: (검증 보류)**
+- [x] **Step 2: (검증 보류)**
 
 이 시점에서 `swift build`는 `AppState.swift`가 제거된 `preferredSize`/`minSize`를 참조하므로 실패한다. 정상이다. Task 3까지 진행 후 빌드한다.
 
@@ -80,7 +92,7 @@ enum EditorTab: String, CaseIterable, Identifiable {
 **Files:**
 - Modify: `Sources/MyWindowManager/UI/Editor/EditorWindow.swift:43-68`
 
-- [ ] **Step 1: `EditorRootView` 교체**
+- [x] **Step 1: `EditorRootView` 교체**
 
 `EditorWindow.swift`의 `struct EditorRootView { ... }` 블록(현재 43~68행) 전체를 아래로 교체. selection은 외부(AppState)에서 바인딩으로 주입받는다.
 
@@ -122,7 +134,7 @@ struct EditorRootView: View {
 
 > 주: `List(_:selection:)`에 `EditorTab`을 직접 쓰려면 `Hashable`이 필요하다. `EditorTab`은 `String` raw value enum이라 자동으로 `Hashable`이다 — 추가 작업 불필요. 사이드바 배경은 직접 깔지 않는다 (메모리: navsplitview-sidebar-glass-card — 시스템 글래스 위에 이중 배경 금지).
 
-- [ ] **Step 2: (검증 보류)** Task 3과 함께 빌드.
+- [x] **Step 2: (검증 보류)** Task 3과 함께 빌드.
 
 ---
 
@@ -132,7 +144,7 @@ struct EditorRootView: View {
 - Modify: `Sources/MyWindowManager/App/AppState.swift:6` (프로퍼티)
 - Modify: `Sources/MyWindowManager/App/AppState.swift:20-59` (`openEditor`)
 
-- [ ] **Step 1: `selectedTab` 프로퍼티 추가**
+- [x] **Step 1: `selectedTab` 프로퍼티 추가**
 
 `AppState.swift`의 6행 `@Published var openedEditor: EditorTab? = nil` 아래에 추가:
 
@@ -142,7 +154,7 @@ struct EditorRootView: View {
 
 (기존 `openedEditor`는 다른 코드가 쓰는지와 무관하게 그대로 둔다 — 제거 범위 아님.)
 
-- [ ] **Step 2: `openEditor(_:)` 전체 교체**
+- [x] **Step 2: `openEditor(_:)` 전체 교체**
 
 20~59행의 `func openEditor(_ tab: EditorTab) { ... }` 전체를 아래로 교체:
 
@@ -201,12 +213,12 @@ struct EditorRootView: View {
 
 > 주: `setFrameAutosaveName`은 `center()`/`setContentSize` **이후**에 호출한다 — autosave에 저장된 프레임이 있으면 그걸 복원하고, 없으면 방금 설정한 기본 크기·중앙 위치를 유지한다. `openPresetEditor()`/`openLayoutEditor()` 헬퍼(17~18행)는 그대로 두면 된다 — 내부적으로 `openEditor`를 호출한다.
 
-- [ ] **Step 3: 빌드 검증 (Task 1·2·3 통합)**
+- [x] **Step 3: 빌드 검증 (Task 1·2·3 통합)**
 
 Run: `swift build`
 Expected: 컴파일 성공 (에러·경고 없음). `EditorRootView(initialTab:)` 관련 에러가 없어야 함 — 27행이 새 `selection:` 바인딩 형태로 바뀌었기 때문.
 
-- [ ] **Step 4: 빌드 후 앱 자동 재실행 + 육안 확인**
+- [x] **Step 4: 빌드 후 앱 자동 재실행 + 육안 확인**
 
 Run: `make run`
 확인 항목 (메모리: restart-after-changes — 코드 변경 후 빌드·재실행 자동 수행):
@@ -217,7 +229,7 @@ Run: `make run`
 - 메뉴바에서 "프리셋 편집" / "레이아웃 편집" 진입 시 해당 항목이 선택된 상태로 열린다.
 - 사이드바에 이중 배경(테두리 안 또 다른 사각형)이 없다.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add Sources/MyWindowManager/UI/Editor/EditorWindow.swift Sources/MyWindowManager/App/AppState.swift
