@@ -41,7 +41,7 @@ struct LayoutEditorView: View {
                 }
                 .padding(.horizontal, 8).padding(.bottom, 8)
             }
-            .frame(minWidth: 220)
+            .frame(minWidth: 200, idealWidth: 220, maxWidth: 260)
 
             // Detail
             if draft != nil {
@@ -118,7 +118,7 @@ struct LayoutEditorView: View {
             }
         }
         .padding(16)
-        .frame(minWidth: 560)
+        .frame(minWidth: 480, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private func monitorPanel(index idx: Int, screen: NSScreen) -> some View {
