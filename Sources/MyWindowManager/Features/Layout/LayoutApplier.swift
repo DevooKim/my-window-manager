@@ -16,7 +16,7 @@ enum LayoutApplier {
             claimed.append(win)
 
             guard let screen = ScreenHelper.resolve(p.displayMatcher) else { continue }
-            let area = ScreenHelper.axVisibleFrame(of: screen)
+            let area = ScreenHelper.placementArea(of: screen)
             let frame = p.frame.resolve(in: area)
             await MainActor.run {
                 WindowController.setFrame(win, frame: frame)

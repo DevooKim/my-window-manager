@@ -11,6 +11,11 @@ struct LayoutMonitorCanvas: View {
     let displayIndex: Int
     @Binding var placements: [AppPlacement]
     @Binding var selection: UUID?
+    /// Display this canvas represents, used to overlay its deadzone.
+    var screen: NSScreen? = nil
+    /// This display's deadzone, passed from the store so changes redraw and
+    /// re-clamp immediately.
+    var deadzone: DisplayDeadzone? = nil
 
     let displayCount: Int
     var labelFor: (AppPlacement) -> String = { $0.bundleId }
@@ -55,6 +60,15 @@ struct LayoutMonitorCanvas: View {
                     SnapGrid(canvas: canvas)
                         .offset(x: origin.x, y: origin.y)
                 }
+
+                // Deadzone shading for this display (informational)
+                DeadzoneOverlay(
+                    monitorPixelSize: monitorPixelSize,
+                    canvasSize: canvas,
+                    screen: screen,
+                    deadzone: deadzone
+                )
+                .offset(x: origin.x, y: origin.y)
 
                 // Placements
                 ForEach(placementIndices, id: \.self) { idx in
@@ -161,23 +175,30 @@ struct LayoutMonitorCanvas: View {
                 isDragging = true
                 let start = clampPoint(value.startLocation, origin: origin, canvas: canvas)
                 let cur = clampPoint(value.location, origin: origin, canvas: canvas)
+                let b = usableBounds
                 let monStart = toMonitor(start, canvas: canvas)
                 let monCur = toMonitor(cur, canvas: canvas)
-                var x = min(monStart.x, monCur.x)
-                var y = min(monStart.y, monCur.y)
-                var w = abs(monCur.x - monStart.x)
-                var h = abs(monCur.y - monStart.y)
+                let x0 = clamp(min(monStart.x, monCur.x), b.minX, b.maxX)
+                let x1 = clamp(max(monStart.x, monCur.x), b.minX, b.maxX)
+                let y0 = clamp(min(monStart.y, monCur.y), b.minY, b.maxY)
+                let y1 = clamp(max(monStart.y, monCur.y), b.minY, b.maxY)
+                var x = x0, y = y0, w = x1 - x0, h = y1 - y0
                 if snap {
                     x = snapValue(x, total: monitorPixelSize.width)
                     y = snapValue(y, total: monitorPixelSize.height)
                     w = snapValue(w, total: monitorPixelSize.width)
                     h = snapValue(h, total: monitorPixelSize.height)
+                    x = clamp(x, b.minX, b.maxX)
+                    y = clamp(y, b.minY, b.maxY)
+                    w = clamp(w, 0, b.maxX - x)
+                    h = clamp(h, 0, b.maxY - y)
                 }
+                // New placements are ratios relative to the usable rect.
                 let frame = RelativeFrame(
-                    x: .ratio(Double(x / max(1, monitorPixelSize.width))),
-                    y: .ratio(Double(y / max(1, monitorPixelSize.height))),
-                    width: .ratio(Double(w / max(1, monitorPixelSize.width))),
-                    height: .ratio(Double(h / max(1, monitorPixelSize.height)))
+                    x: .ratio(Double((x - b.minX) / max(1, b.width))),
+                    y: .ratio(Double((y - b.minY) / max(1, b.height))),
+                    width: .ratio(Double(w / max(1, b.width))),
+                    height: .ratio(Double(h / max(1, b.height)))
                 )
 
                 if let sel = selection,
@@ -210,18 +231,21 @@ struct LayoutMonitorCanvas: View {
                 guard let start = dragStart else { return }
                 let dxMon = value.translation.width * monitorPixelSize.width / max(1, canvas.width)
                 let dyMon = value.translation.height * monitorPixelSize.height / max(1, canvas.height)
-                let sx = start.x.resolve(in: monitorPixelSize.width)
-                let sy = start.y.resolve(in: monitorPixelSize.height)
-                let w = start.width.resolve(in: monitorPixelSize.width)
-                let h = start.height.resolve(in: monitorPixelSize.height)
-                var newX = clamp(sx + dxMon, 0, monitorPixelSize.width - w)
-                var newY = clamp(sy + dyMon, 0, monitorPixelSize.height - h)
+                let sx = framePosX(start.x)
+                let sy = framePosY(start.y)
+                let w = frameW(start.width)
+                let h = frameH(start.height)
+                let b = usableBounds
+                var newX = clamp(sx + dxMon, b.minX, max(b.minX, b.maxX - w))
+                var newY = clamp(sy + dyMon, b.minY, max(b.minY, b.maxY - h))
                 if snap {
-                    newX = snapValue(newX, total: monitorPixelSize.width)
-                    newY = snapValue(newY, total: monitorPixelSize.height)
+                    newX = clamp(snapValue(newX, total: monitorPixelSize.width),
+                                 b.minX, max(b.minX, b.maxX - w))
+                    newY = clamp(snapValue(newY, total: monitorPixelSize.height),
+                                 b.minY, max(b.minY, b.maxY - h))
                 }
-                placements[idx].frame.x = inheritUnit(start.x, pixels: newX, total: monitorPixelSize.width)
-                placements[idx].frame.y = inheritUnit(start.y, pixels: newY, total: monitorPixelSize.height)
+                placements[idx].frame.x = unitPosX(start.x, monitorPx: newX)
+                placements[idx].frame.y = unitPosY(start.y, monitorPx: newY)
             }
             .onEnded { _ in dragStart = nil; isDragging = false }
     }
@@ -234,40 +258,45 @@ struct LayoutMonitorCanvas: View {
                 guard let start = dragStart else { return }
                 let dxMon = value.translation.width * monitorPixelSize.width / max(1, canvas.width)
                 let dyMon = value.translation.height * monitorPixelSize.height / max(1, canvas.height)
-                let sx = start.x.resolve(in: monitorPixelSize.width)
-                let sy = start.y.resolve(in: monitorPixelSize.height)
-                let sw = start.width.resolve(in: monitorPixelSize.width)
-                let sh = start.height.resolve(in: monitorPixelSize.height)
+                let sx = framePosX(start.x)
+                let sy = framePosY(start.y)
+                let sw = frameW(start.width)
+                let sh = frameH(start.height)
 
+                let b = usableBounds
                 var nx = sx, ny = sy, nw = sw, nh = sh
                 switch corner {
                 case .topLeft:
-                    nx = clamp(sx + dxMon, 0, sx + sw - 20)
-                    ny = clamp(sy + dyMon, 0, sy + sh - 20)
+                    nx = clamp(sx + dxMon, b.minX, sx + sw - 20)
+                    ny = clamp(sy + dyMon, b.minY, sy + sh - 20)
                     nw = sw - (nx - sx)
                     nh = sh - (ny - sy)
                 case .topRight:
-                    ny = clamp(sy + dyMon, 0, sy + sh - 20)
-                    nw = clamp(sw + dxMon, 20, monitorPixelSize.width - sx)
+                    ny = clamp(sy + dyMon, b.minY, sy + sh - 20)
+                    nw = clamp(sw + dxMon, 20, b.maxX - sx)
                     nh = sh - (ny - sy)
                 case .bottomLeft:
-                    nx = clamp(sx + dxMon, 0, sx + sw - 20)
+                    nx = clamp(sx + dxMon, b.minX, sx + sw - 20)
                     nw = sw - (nx - sx)
-                    nh = clamp(sh + dyMon, 20, monitorPixelSize.height - sy)
+                    nh = clamp(sh + dyMon, 20, b.maxY - sy)
                 case .bottomRight:
-                    nw = clamp(sw + dxMon, 20, monitorPixelSize.width - sx)
-                    nh = clamp(sh + dyMon, 20, monitorPixelSize.height - sy)
+                    nw = clamp(sw + dxMon, 20, b.maxX - sx)
+                    nh = clamp(sh + dyMon, 20, b.maxY - sy)
                 }
                 if snap {
                     nx = snapValue(nx, total: monitorPixelSize.width)
                     ny = snapValue(ny, total: monitorPixelSize.height)
                     nw = snapValue(nw, total: monitorPixelSize.width)
                     nh = snapValue(nh, total: monitorPixelSize.height)
+                    nx = clamp(nx, b.minX, b.maxX)
+                    ny = clamp(ny, b.minY, b.maxY)
+                    nw = clamp(nw, 20, b.maxX - nx)
+                    nh = clamp(nh, 20, b.maxY - ny)
                 }
-                placements[idx].frame.x = inheritUnit(start.x, pixels: nx, total: monitorPixelSize.width)
-                placements[idx].frame.y = inheritUnit(start.y, pixels: ny, total: monitorPixelSize.height)
-                placements[idx].frame.width = inheritUnit(start.width, pixels: nw, total: monitorPixelSize.width)
-                placements[idx].frame.height = inheritUnit(start.height, pixels: nh, total: monitorPixelSize.height)
+                placements[idx].frame.x = unitPosX(start.x, monitorPx: nx)
+                placements[idx].frame.y = unitPosY(start.y, monitorPx: ny)
+                placements[idx].frame.width = unitW(start.width, monitorPx: nw)
+                placements[idx].frame.height = unitH(start.height, monitorPx: nh)
             }
             .onEnded { _ in dragStart = nil; isDragging = false }
     }
@@ -283,18 +312,42 @@ struct LayoutMonitorCanvas: View {
     private func canvasRect(of frame: RelativeFrame, canvas: CGSize) -> CGRect {
         let sx = canvas.width / max(1, monitorPixelSize.width)
         let sy = canvas.height / max(1, monitorPixelSize.height)
-        return CGRect(
-            x: frame.x.resolve(in: monitorPixelSize.width) * sx,
-            y: frame.y.resolve(in: monitorPixelSize.height) * sy,
-            width: frame.width.resolve(in: monitorPixelSize.width) * sx,
-            height: frame.height.resolve(in: monitorPixelSize.height) * sy
-        )
+        // Resolve within the usable rect (deadzone applied) so the preview
+        // matches real placement and sits inside the deadzone shading.
+        let r = frame.resolve(in: usableBounds)
+        return CGRect(x: r.minX * sx, y: r.minY * sy, width: r.width * sx, height: r.height * sy)
+    }
+
+    // Frame values are relative to the usable rect; these map to/from absolute
+    // monitor pixels. Position units add the usable origin; size units don't.
+    private func framePosX(_ u: FrameUnit) -> CGFloat { usableBounds.minX + u.resolve(in: usableBounds.width) }
+    private func framePosY(_ u: FrameUnit) -> CGFloat { usableBounds.minY + u.resolve(in: usableBounds.height) }
+    private func frameW(_ u: FrameUnit) -> CGFloat { u.resolve(in: usableBounds.width) }
+    private func frameH(_ u: FrameUnit) -> CGFloat { u.resolve(in: usableBounds.height) }
+    private func unitPosX(_ o: FrameUnit, monitorPx: CGFloat) -> FrameUnit {
+        inheritUnit(o, pixels: monitorPx - usableBounds.minX, total: usableBounds.width)
+    }
+    private func unitPosY(_ o: FrameUnit, monitorPx: CGFloat) -> FrameUnit {
+        inheritUnit(o, pixels: monitorPx - usableBounds.minY, total: usableBounds.height)
+    }
+    private func unitW(_ o: FrameUnit, monitorPx: CGFloat) -> FrameUnit {
+        inheritUnit(o, pixels: monitorPx, total: usableBounds.width)
+    }
+    private func unitH(_ o: FrameUnit, monitorPx: CGFloat) -> FrameUnit {
+        inheritUnit(o, pixels: monitorPx, total: usableBounds.height)
     }
 
     private func toMonitor(_ pt: CGPoint, canvas: CGSize) -> CGPoint {
         let sx = monitorPixelSize.width / max(1, canvas.width)
         let sy = monitorPixelSize.height / max(1, canvas.height)
         return CGPoint(x: pt.x * sx, y: pt.y * sy)
+    }
+
+    /// Rect (in monitor pixels) placements may occupy — the deadzone's usable
+    /// rect when present, else the whole monitor. Drag gestures clamp to it.
+    private var usableBounds: CGRect {
+        DeadzoneGeometry.usableRectInMonitorPixels(for: screen, deadzone: deadzone)
+            ?? CGRect(origin: .zero, size: monitorPixelSize)
     }
 
     private func clampPoint(_ pt: CGPoint, origin: CGPoint, canvas: CGSize) -> CGPoint {

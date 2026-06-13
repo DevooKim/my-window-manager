@@ -9,12 +9,15 @@ struct PresetEditorView: View {
     @State private var snap: Bool = true
     @State private var monitorIndex: Int = 0
 
-    private var monitorPixelSize: CGSize {
+    private var previewScreen: NSScreen? {
         let screens = NSScreen.screens
-        guard monitorIndex < screens.count else {
-            return CGSize(width: 1920, height: 1080)
-        }
-        return screens[monitorIndex].frame.size
+        return monitorIndex < screens.count ? screens[monitorIndex] : screens.first
+    }
+
+    private var monitorPixelSize: CGSize {
+        // Visible frame (menu bar / Dock excluded) — the canvas draws and
+        // resolves frames in this space, matching where windows actually land.
+        previewScreen?.visibleFrame.size ?? CGSize(width: 1920, height: 1080)
     }
 
     var body: some View {
@@ -79,7 +82,9 @@ struct PresetEditorView: View {
             MonitorCanvas(
                 monitorPixelSize: monitorPixelSize,
                 area: frameBinding,
-                snap: snap
+                snap: snap,
+                screen: previewScreen,
+                deadzone: DeadzoneGeometry.deadzone(for: previewScreen, in: store.deadzones)
             )
             .frame(minHeight: 260)
 

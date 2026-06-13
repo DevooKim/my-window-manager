@@ -8,13 +8,13 @@ enum ResizeApplier {
               let screen = ScreenHelper.screen(containing: win) else {
             return false
         }
-        let area = ScreenHelper.axVisibleFrame(of: screen)
+        let area = ScreenHelper.placementArea(of: screen)
         let frame = preset.frame.resolve(in: area)
         WindowController.setFrame(win, frame: frame)
         return true
     }
 
     static func previewFrame(_ preset: ResizePreset, on screen: NSScreen) -> CGRect {
-        preset.frame.resolve(in: ScreenHelper.axVisibleFrame(of: screen))
+        preset.frame.resolve(in: ScreenHelper.placementArea(of: screen))
     }
 }

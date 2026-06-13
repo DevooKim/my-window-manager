@@ -127,13 +127,15 @@ struct LayoutEditorView: View {
                 .font(.caption).foregroundStyle(.secondary)
 
             LayoutMonitorCanvas(
-                monitorPixelSize: screen.frame.size,
+                monitorPixelSize: screen.visibleFrame.size,
                 displayIndex: idx,
                 placements: Binding(
                     get: { draft?.placements ?? [] },
                     set: { draft?.placements = $0 }
                 ),
                 selection: $selectedPlacement,
+                screen: screen,
+                deadzone: DeadzoneGeometry.deadzone(for: screen, in: store.deadzones),
                 displayCount: NSScreen.screens.count,
                 labelFor: { p in
                     let appName = catalog.find(p.bundleId)?.name ?? p.bundleId

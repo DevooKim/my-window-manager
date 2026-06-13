@@ -96,4 +96,44 @@ struct RelativeFrame: Codable, Hashable {
             height: height.resolve(in: area.height)
         )
     }
+
+    /// Clamp this frame so it fits inside a usable area of `usableSize` (the
+    /// post-deadzone area, with local origin at 0,0). Returns `nil` when no
+    /// change is needed. Each dimension keeps its unit (ratio/px). Position is
+    /// pulled in first, then size is trimmed to whatever room remains — so a
+    /// frame that starts past the right edge slides left rather than vanishing.
+    func clampedToUsable(_ usableSize: CGSize) -> RelativeFrame? {
+        let w = usableSize.width, h = usableSize.height
+        guard w > 0, h > 0 else { return nil }
+
+        let px = x.resolve(in: w)
+        let py = y.resolve(in: h)
+        let pw = width.resolve(in: w)
+        let ph = height.resolve(in: h)
+
+        let nw = min(pw, w)
+        let nh = min(ph, h)
+        let nx = min(max(0, px), max(0, w - nw))
+        let ny = min(max(0, py), max(0, h - nh))
+
+        // Within ~1px? Treat as already fitting — avoids churn on ratio frames.
+        if abs(nx - px) < 1, abs(ny - py) < 1,
+           abs(nw - pw) < 1, abs(nh - ph) < 1 {
+            return nil
+        }
+
+        return RelativeFrame(
+            x: rebuild(x, pixels: nx, total: w),
+            y: rebuild(y, pixels: ny, total: h),
+            width: rebuild(width, pixels: nw, total: w),
+            height: rebuild(height, pixels: nh, total: h)
+        )
+    }
+
+    private func rebuild(_ unit: FrameUnit, pixels: CGFloat, total: CGFloat) -> FrameUnit {
+        switch unit {
+        case .ratio: return .ratio(total == 0 ? 0 : Double(pixels / total))
+        case .pixels: return .pixels(pixels)
+        }
+    }
 }

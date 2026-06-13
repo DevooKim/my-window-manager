@@ -7,11 +7,14 @@ struct AppConfig: Codable {
     var presets: [ResizePreset]
     var layouts: [Layout]
     var cycles: [PresetCycle]
+    var deadzones: [DisplayDeadzone]
 
-    init(presets: [ResizePreset], layouts: [Layout], cycles: [PresetCycle]) {
+    init(presets: [ResizePreset], layouts: [Layout], cycles: [PresetCycle],
+         deadzones: [DisplayDeadzone]) {
         self.presets = presets
         self.layouts = layouts
         self.cycles = cycles
+        self.deadzones = deadzones
     }
 
     init(from decoder: Decoder) throws {
@@ -21,6 +24,8 @@ struct AppConfig: Codable {
         layouts = try c.decodeIfPresent([Layout].self, forKey: .layouts) ?? []
         // `cycles` was added later — older config.json files won't have it.
         cycles = try c.decodeIfPresent([PresetCycle].self, forKey: .cycles) ?? []
+        // `deadzones` added later too.
+        deadzones = try c.decodeIfPresent([DisplayDeadzone].self, forKey: .deadzones) ?? []
     }
 }
 
@@ -29,6 +34,16 @@ final class ConfigStore: ObservableObject {
     @Published var presets: [ResizePreset] = []
     @Published var layouts: [Layout] = []
     @Published var cycles: [PresetCycle] = []
+    @Published var deadzones: [DisplayDeadzone] = [] {
+        didSet { syncDeadzones() }
+    }
+
+    /// Push the current deadzones into `ScreenHelper` so the appliers see them.
+    private func syncDeadzones() {
+        ScreenHelper.deadzonesByDisplayID = Dictionary(
+            deadzones.map { ($0.displayID, $0) }, uniquingKeysWith: { a, _ in a }
+        )
+    }
 
     /// True when there is no config yet — the user hasn't picked a starter
     /// hotkey scheme. The onboarding flow shows the scheme picker in this case.
@@ -51,14 +66,17 @@ final class ConfigStore: ObservableObject {
             self.presets = cfg.presets
             self.layouts = cfg.layouts
             self.cycles = cfg.cycles
+            self.deadzones = cfg.deadzones
             self.needsSetup = false
         } else {
             // First launch — wait for the user to choose a starter scheme.
             self.presets = []
             self.layouts = []
             self.cycles = []
+            self.deadzones = []
             self.needsSetup = true
         }
+        syncDeadzones()
     }
 
     /// Seed the starter presets for the chosen scheme and persist. Also seeds a
@@ -83,7 +101,7 @@ final class ConfigStore: ObservableObject {
     }
 
     func save() {
-        let cfg = AppConfig(presets: presets, layouts: layouts, cycles: cycles)
+        let cfg = AppConfig(presets: presets, layouts: layouts, cycles: cycles, deadzones: deadzones)
         let enc = JSONEncoder()
         enc.outputFormatting = [.prettyPrinted, .sortedKeys]
         guard let data = try? enc.encode(cfg) else { return }
@@ -108,7 +126,7 @@ final class ConfigStore: ObservableObject {
 
     /// Write the full configuration (presets, cycles, layouts) to a file.
     func export(to fileURL: URL) throws {
-        let cfg = AppConfig(presets: presets, layouts: layouts, cycles: cycles)
+        let cfg = AppConfig(presets: presets, layouts: layouts, cycles: cycles, deadzones: deadzones)
         let enc = JSONEncoder()
         enc.outputFormatting = [.prettyPrinted, .sortedKeys]
         guard let data = try? enc.encode(cfg) else { throw ConfigIOError.encodeFailed }
@@ -125,8 +143,58 @@ final class ConfigStore: ObservableObject {
         presets = cfg.presets
         layouts = cfg.layouts
         cycles = cfg.cycles
+        deadzones = cfg.deadzones
         needsSetup = false
         save()
+    }
+
+    func upsert(deadzone: DisplayDeadzone) {
+        if let i = deadzones.firstIndex(where: { $0.displayID == deadzone.displayID }) {
+            deadzones[i] = deadzone
+        } else {
+            deadzones.append(deadzone)
+        }
+        save()
+    }
+
+    func deleteDeadzone(displayID: String) {
+        deadzones.removeAll { $0.displayID == displayID }
+        save()
+    }
+
+    /// Clamp existing presets and layout placements into a display's new usable
+    /// area after its deadzone changed. `usableSize` is the post-deadzone area
+    /// of that display; `placementBelongsToDisplay` decides which layout
+    /// placements target it. Presets are display-agnostic, so all are clamped
+    /// against `usableSize` (ratio frames are unaffected — only fixed-pixel
+    /// frames that overflow get trimmed). Returns the number of frames changed.
+    ///
+    /// Persists once at the end. Call from the deadzone "적용" flow, ideally
+    /// after `upsert(deadzone:)` so the new geometry is already live.
+    @discardableResult
+    func migrateFrames(toUsableSize usableSize: CGSize,
+                       placementBelongsToDisplay: (AppPlacement) -> Bool) -> Int {
+        var changed = 0
+
+        for i in presets.indices {
+            if let clamped = presets[i].frame.clampedToUsable(usableSize) {
+                presets[i].frame = clamped
+                changed += 1
+            }
+        }
+
+        for li in layouts.indices {
+            for pi in layouts[li].placements.indices {
+                guard placementBelongsToDisplay(layouts[li].placements[pi]) else { continue }
+                if let clamped = layouts[li].placements[pi].frame.clampedToUsable(usableSize) {
+                    layouts[li].placements[pi].frame = clamped
+                    changed += 1
+                }
+            }
+        }
+
+        if changed > 0 { save() }
+        return changed
     }
 
     func upsert(preset: ResizePreset) {
