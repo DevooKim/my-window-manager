@@ -16,14 +16,8 @@ struct MenuBarContent: View {
 
     var body: some View {
         Group {
-            // AppKit 경로(hotkey 등)에서도 설정 창을 열 수 있도록 SwiftUI의
-            // openWindow 액션을 AppState에 주입해 둔다.
-            Color.clear.frame(width: 0, height: 0)
-                .onAppear {
-                    app.openEditorWindow = { openWindow(id: AppState.editorWindowID) }
-                    app.openUpdateWindow = { openWindow(id: UpdatePromptState.windowID) }
-                    app.openAboutWindow = { openWindow(id: AppState.aboutWindowID) }
-                }
+            // openWindow 액션 주입은 MenuBarExtra label의 WindowOpenerInjector가
+            // 담당한다(메뉴를 열지 않아도, 아이콘이 숨겨져도 동작하도록).
 
             Button("My Window Manager 정보") {
                 app.openAboutWindow?()
@@ -79,6 +73,7 @@ struct MenuBarContent: View {
             } label: {
                 Label("설정...", systemImage: "gearshape")
             }
+            .keyboardShortcut(",", modifiers: .command)
             Button {
                 NSApp.terminate(nil)
             } label: {

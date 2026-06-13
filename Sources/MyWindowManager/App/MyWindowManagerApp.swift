@@ -6,13 +6,22 @@ import Combine
 struct MyWindowManagerApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 
+    /// 상태 막대(헤더 메뉴) 아이콘 표시 여부.
+    @AppStorage(AppState.showMenuBarIconKey) private var showMenuBarIcon = true
+
     var body: some Scene {
-        MenuBarExtra("My Window Manager", systemImage: "rectangle.split.3x1") {
+        MenuBarExtra(isInserted: $showMenuBarIcon) {
             MenuBarContent()
                 .environmentObject(delegate.store)
                 .environmentObject(delegate.ax)
                 .environmentObject(delegate.app)
                 .environmentObject(delegate.hotkeys)
+        } label: {
+            // label 클로저는 아이콘이 숨겨져도 SwiftUI가 평가하므로, 여기서
+            // openWindow 액션을 주입해 메뉴 열림 여부와 무관하게 설정 창을 열 수
+            // 있게 한다. (MenuBarContent.onAppear는 메뉴를 클릭해야만 불린다.)
+            Image(systemName: "rectangle.split.3x1")
+                .background(WindowOpenerInjector().environmentObject(delegate.app))
         }
         .menuBarExtraStyle(.menu)
 
@@ -93,6 +102,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         // running (silent: alert only when an update is available).
         DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
             Updater.startAutomaticChecks()
+        }
+    }
+
+    /// 이미 실행 중인 앱을 다시 열면(Finder/Dock/`open`) 설정 창을 띄운다.
+    /// 헤더메뉴 아이콘을 숨겨 메뉴로 접근할 수 없을 때 복귀 경로가 된다.
+    /// 아이콘이 꺼져 있으면 다시 켜서(= MenuBarContent가 openWindow 액션을
+    /// 주입하도록) 설정 창을 열 수 있게 한다.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        // 아이콘이 숨겨져 있으면 MenuBarExtra 안의 openWindow 인젝터가 평가되지
+        // 않아 설정 창을 열 수 없다. 잠깐 아이콘을 켜서 인젝터가 주입되게 한 뒤
+        // 설정 창을 연다. (아이콘은 사용자가 설정에서 다시 끌 수 있다.)
+        if !UserDefaults.standard.bool(forKey: AppState.showMenuBarIconKey) {
+            UserDefaults.standard.set(true, forKey: AppState.showMenuBarIconKey)
+        }
+        openEditorWhenReady(attempt: 0)
+        return true
+    }
+
+    /// openWindow 액션은 MenuBarExtra 인젝터가 렌더된 뒤 주입되므로, 준비될
+    /// 때까지 잠깐 재시도한 다음 설정 창을 연다. (최대 ~2초)
+    private func openEditorWhenReady(attempt: Int) {
+        if app.openEditorWindow != nil {
+            app.openEditor(.general)
+            return
+        }
+        guard attempt < 20 else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            self?.openEditorWhenReady(attempt: attempt + 1)
         }
     }
 }

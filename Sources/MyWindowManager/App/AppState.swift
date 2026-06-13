@@ -7,6 +7,8 @@ final class AppState: ObservableObject {
     static let editorWindowID = "editor"
     /// Scene id for the SwiftUI-owned About window (menu bar "정보").
     static let aboutWindowID = "about"
+    /// UserDefaults key for whether the status-bar (menu bar) icon is shown.
+    static let showMenuBarIconKey = "showMenuBarIcon"
 
     @Published var openedEditor: EditorTab? = nil
     @Published var selectedTab: EditorTab = .presets

@@ -7,9 +7,17 @@ import UniformTypeIdentifiers
 struct GeneralView: View {
     @EnvironmentObject var store: ConfigStore
     @EnvironmentObject var hotkeys: HotkeyRegistryHolder
+    @AppStorage(AppState.showMenuBarIconKey) private var showMenuBarIcon = true
 
     var body: some View {
         Form {
+            Section {
+                Toggle("헤더메뉴 아이콘 표시", isOn: $showMenuBarIcon)
+            } footer: {
+                Text("끄면 상태 막대 아이콘이 사라집니다. 다시 표시하려면 앱을 한 번 더 실행하세요 — 설정 창이 열리고 아이콘이 돌아옵니다.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
             Section("현재 설정") {
                 summaryRow("프리셋", store.presets.count)
                 summaryRow("사이클", store.cycles.count)
