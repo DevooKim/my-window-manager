@@ -4,6 +4,7 @@ import AppKit
 @MainActor
 final class AppState: ObservableObject {
     @Published var openedEditor: EditorTab? = nil
+    @Published var selectedTab: EditorTab = .presets
     @Published var showOnboarding: Bool = false
 
     private var editorWindow: NSWindow?
@@ -19,34 +20,44 @@ final class AppState: ObservableObject {
 
     func openEditor(_ tab: EditorTab) {
         guard let store, let catalog, let hotkeys else { return }
+        selectedTab = tab
         if let w = editorWindow {
+            // 이미 열려 있으면 창을 리사이즈하지 않고 선택만 전환.
             w.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
         }
-        let root = EditorRootView(initialTab: tab)
-            .environmentObject(store)
-            .environmentObject(catalog)
-            .environmentObject(hotkeys)
+        let root = EditorRootView(selection: Binding(
+            get: { [weak self] in self?.selectedTab ?? .presets },
+            set: { [weak self] in self?.selectedTab = $0 }
+        ))
+        .environmentObject(store)
+        .environmentObject(catalog)
+        .environmentObject(hotkeys)
         let host = NSHostingController(rootView: root)
         let window = NSWindow(contentViewController: host)
         window.title = "My Window Manager"
         window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
+        window.titlebarAppearsTransparent = true
 
-        // Open at the tab's preferred size, but never larger than the screen.
+        // 단일 기본 크기(가장 큰 레이아웃 기준), 화면보다 크지 않게 클램프.
         let visible = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame.size
             ?? NSSize(width: 1280, height: 800)
         let margin: CGFloat = 0.92
+        let defaultSize = NSSize(width: 980, height: 680)
+        let minSize = NSSize(width: 720, height: 520)
         let content = NSSize(
-            width: min(tab.preferredSize.width, visible.width * margin),
-            height: min(tab.preferredSize.height, visible.height * margin)
+            width: min(defaultSize.width, visible.width * margin),
+            height: min(defaultSize.height, visible.height * margin)
         )
         window.contentMinSize = NSSize(
-            width: min(tab.minSize.width, content.width),
-            height: min(tab.minSize.height, content.height)
+            width: min(minSize.width, content.width),
+            height: min(minSize.height, content.height)
         )
         window.setContentSize(content)
         window.center()
+        // 사용자가 조절한 크기를 재오픈/재실행 시 복원.
+        window.setFrameAutosaveName("MyWindowManagerEditor")
         window.isReleasedWhenClosed = false
         window.delegate = WindowCloseHandler.shared
         WindowCloseHandler.shared.onClose = { [weak self] w in

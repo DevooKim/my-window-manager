@@ -3,6 +3,7 @@ import SwiftUI
 enum EditorTab: String, CaseIterable, Identifiable {
     case presets, cycles, layouts, displays, general, info
     var id: String { rawValue }
+
     var label: String {
         switch self {
         case .presets: return "Resize Presets"
@@ -14,55 +15,61 @@ enum EditorTab: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Preferred window size when this tab is opened. Layouts needs the most
-    /// room for its multi-monitor canvases; presets/cycles are more compact.
-    var preferredSize: NSSize {
+    /// SF Symbol name shown next to the label in the sidebar.
+    var symbol: String {
         switch self {
-        case .presets: return NSSize(width: 720, height: 560)
-        case .cycles:  return NSSize(width: 760, height: 580)
-        case .layouts: return NSSize(width: 980, height: 680)
-        case .displays: return NSSize(width: 620, height: 560)
-        case .general: return NSSize(width: 620, height: 520)
-        case .info:    return NSSize(width: 460, height: 420)
+        case .presets: return "rectangle.split.2x1"
+        case .cycles: return "arrow.triangle.2.circlepath"
+        case .layouts: return "rectangle.3.group"
+        case .displays: return "display"
+        case .general: return "gearshape"
+        case .info: return "info.circle"
         }
     }
 
-    /// Smallest usable size for this tab.
-    var minSize: NSSize {
+    /// Accent color applied to the sidebar icon.
+    var tint: Color {
         switch self {
-        case .presets: return NSSize(width: 620, height: 460)
-        case .cycles:  return NSSize(width: 640, height: 480)
-        case .layouts: return NSSize(width: 760, height: 520)
-        case .displays: return NSSize(width: 520, height: 440)
-        case .general: return NSSize(width: 520, height: 440)
-        case .info:    return NSSize(width: 420, height: 380)
+        case .presets: return .blue
+        case .cycles: return .purple
+        case .layouts: return .indigo
+        case .displays: return .teal
+        case .general: return .gray
+        case .info: return .green
         }
     }
 }
 
 struct EditorRootView: View {
-    @State var initialTab: EditorTab = .presets
+    @Binding var selection: EditorTab
 
     var body: some View {
-        TabView(selection: $initialTab) {
-            PresetEditorView()
-                .tabItem { Label("프리셋", systemImage: "rectangle.split.2x1") }
-                .tag(EditorTab.presets)
-            CycleEditorView()
-                .tabItem { Label("사이클", systemImage: "arrow.triangle.2.circlepath") }
-                .tag(EditorTab.cycles)
-            LayoutEditorView()
-                .tabItem { Label("레이아웃", systemImage: "rectangle.3.group") }
-                .tag(EditorTab.layouts)
-            DisplayDeadzoneView()
-                .tabItem { Label("디스플레이", systemImage: "display") }
-                .tag(EditorTab.displays)
-            GeneralView()
-                .tabItem { Label("일반", systemImage: "gearshape") }
-                .tag(EditorTab.general)
-            InfoView()
-                .tabItem { Label("정보", systemImage: "info.circle") }
-                .tag(EditorTab.info)
+        NavigationSplitView {
+            List(EditorTab.allCases, selection: $selection) { tab in
+                Label {
+                    Text(tab.label)
+                } icon: {
+                    Image(systemName: tab.symbol)
+                        .foregroundStyle(tab.tint)
+                }
+                .tag(tab)
+            }
+            .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 300)
+        } detail: {
+            detailView
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    @ViewBuilder
+    private var detailView: some View {
+        switch selection {
+        case .presets: PresetEditorView()
+        case .cycles: CycleEditorView()
+        case .layouts: LayoutEditorView()
+        case .displays: DisplayDeadzoneView()
+        case .general: GeneralView()
+        case .info: InfoView()
         }
     }
 }
