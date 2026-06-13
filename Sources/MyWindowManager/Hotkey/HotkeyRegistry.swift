@@ -97,6 +97,14 @@ final class HotkeyRegistry {
         _ = ResizeApplier.apply(presets[index])
         lastCycleId = id
         lastCycleIndex = index
+
+        // 적용 위치를 화면 중앙 HUD로 잠깐 표시.
+        CycleHUDController.shared.show(
+            cycleName: cycle.name,
+            items: presets.map { HUDItem(name: $0.name, frame: $0.frame) },
+            currentIndex: index,
+            style: store.cycleHUDStyle
+        )
     }
 
     private func resetCycleState() {

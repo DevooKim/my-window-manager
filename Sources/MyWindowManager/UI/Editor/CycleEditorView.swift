@@ -10,9 +10,13 @@ struct CycleEditorView: View {
     @State private var draft: PresetCycle?
 
     var body: some View {
-        HSplitView {
-            sidebar
-            detail
+        VStack(spacing: 0) {
+            hudStyleBar
+            Divider()
+            HSplitView {
+                sidebar
+                detail
+            }
         }
         .onChange(of: selection) { _, newId in
             draft = store.cycles.first { $0.id == newId }
@@ -23,6 +27,25 @@ struct CycleEditorView: View {
                 draft = first
             }
         }
+    }
+
+    // MARK: - HUD style
+
+    private var hudStyleBar: some View {
+        HStack {
+            Text("사이클 HUD")
+            Picker("", selection: $store.cycleHUDStyle) {
+                ForEach(CycleHUDStyle.allCases) { style in
+                    Text(style.displayName).tag(style)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(width: 220)
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
     }
 
     // MARK: - Sidebar

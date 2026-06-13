@@ -8,13 +8,15 @@ struct AppConfig: Codable {
     var layouts: [Layout]
     var cycles: [PresetCycle]
     var deadzones: [DisplayDeadzone]
+    var cycleHUDStyle: CycleHUDStyle
 
     init(presets: [ResizePreset], layouts: [Layout], cycles: [PresetCycle],
-         deadzones: [DisplayDeadzone]) {
+         deadzones: [DisplayDeadzone], cycleHUDStyle: CycleHUDStyle = .thumbnails) {
         self.presets = presets
         self.layouts = layouts
         self.cycles = cycles
         self.deadzones = deadzones
+        self.cycleHUDStyle = cycleHUDStyle
     }
 
     init(from decoder: Decoder) throws {
@@ -26,6 +28,8 @@ struct AppConfig: Codable {
         cycles = try c.decodeIfPresent([PresetCycle].self, forKey: .cycles) ?? []
         // `deadzones` added later too.
         deadzones = try c.decodeIfPresent([DisplayDeadzone].self, forKey: .deadzones) ?? []
+        // `cycleHUDStyle` added later too — default to thumbnails.
+        cycleHUDStyle = try c.decodeIfPresent(CycleHUDStyle.self, forKey: .cycleHUDStyle) ?? .thumbnails
     }
 }
 
@@ -36,6 +40,9 @@ final class ConfigStore: ObservableObject {
     @Published var cycles: [PresetCycle] = []
     @Published var deadzones: [DisplayDeadzone] = [] {
         didSet { syncDeadzones() }
+    }
+    @Published var cycleHUDStyle: CycleHUDStyle = .thumbnails {
+        didSet { if cycleHUDStyle != oldValue { save() } }
     }
 
     /// Push the current deadzones into `ScreenHelper` so the appliers see them.
@@ -67,6 +74,7 @@ final class ConfigStore: ObservableObject {
             self.layouts = cfg.layouts
             self.cycles = cfg.cycles
             self.deadzones = cfg.deadzones
+            self.cycleHUDStyle = cfg.cycleHUDStyle
             self.needsSetup = false
         } else {
             // First launch — wait for the user to choose a starter scheme.
@@ -101,7 +109,7 @@ final class ConfigStore: ObservableObject {
     }
 
     func save() {
-        let cfg = AppConfig(presets: presets, layouts: layouts, cycles: cycles, deadzones: deadzones)
+        let cfg = AppConfig(presets: presets, layouts: layouts, cycles: cycles, deadzones: deadzones, cycleHUDStyle: cycleHUDStyle)
         let enc = JSONEncoder()
         enc.outputFormatting = [.prettyPrinted, .sortedKeys]
         guard let data = try? enc.encode(cfg) else { return }
@@ -126,7 +134,7 @@ final class ConfigStore: ObservableObject {
 
     /// Write the full configuration (presets, cycles, layouts) to a file.
     func export(to fileURL: URL) throws {
-        let cfg = AppConfig(presets: presets, layouts: layouts, cycles: cycles, deadzones: deadzones)
+        let cfg = AppConfig(presets: presets, layouts: layouts, cycles: cycles, deadzones: deadzones, cycleHUDStyle: cycleHUDStyle)
         let enc = JSONEncoder()
         enc.outputFormatting = [.prettyPrinted, .sortedKeys]
         guard let data = try? enc.encode(cfg) else { throw ConfigIOError.encodeFailed }
@@ -144,6 +152,7 @@ final class ConfigStore: ObservableObject {
         layouts = cfg.layouts
         cycles = cfg.cycles
         deadzones = cfg.deadzones
+        cycleHUDStyle = cfg.cycleHUDStyle
         needsSetup = false
         save()
     }
