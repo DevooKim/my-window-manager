@@ -37,7 +37,6 @@ struct GeneralView: View {
             }
         }
         .formStyle(.grouped)
-        .fixedSize(horizontal: false, vertical: true)
     }
 
     private func summaryRow(_ label: String, _ count: Int) -> some View {

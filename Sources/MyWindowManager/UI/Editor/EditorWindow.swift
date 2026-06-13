@@ -58,11 +58,21 @@ struct EditorRootView: View {
                 }
                 .tag(tab)
             }
+            // List 기본 배경을 끄고 그 뒤에 behind-window vibrancy를 깔아
+            // 바탕화면이 비치게 한다.
+            .scrollContentBackground(.hidden)
+            .background(
+                VisualEffectView(material: .hudWindow, makesHostWindowTransparent: true)
+                    .ignoresSafeArea()
+            )
             .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 300)
         } detail: {
             detailView
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .navigationTitle("")
+                // 창을 투명 처리하므로 디테일 영역은 불투명 윈도우 머티리얼을
+                // 깔아 가독성을 유지한다.
+                .background(VisualEffectView(material: .windowBackground).ignoresSafeArea())
         }
     }
 
