@@ -19,11 +19,16 @@ cp .build/release/MyWindowManager "$APP/Contents/MacOS/MyWindowManager"
 IDENTITY="${WM_SIGN_IDENTITY:-MyWindowManager Dev}"
 # --deep so any nested bundles are signed too; an unsigned nested bundle
 # fails the outer signature.
-if security find-identity -v -p codesigning | grep -q "$IDENTITY"; then
-    codesign --force --deep --sign "$IDENTITY" "$APP"
+#
+# We attempt the real sign directly rather than gating on
+# `find-identity -p codesigning`: a self-signed identity that isn't a
+# trusted root is omitted from that policy list but still signs fine, and
+# we don't want (or need) to register it as a trusted root just to pass a
+# precheck. If the sign fails (identity truly missing), fall back to ad-hoc.
+if codesign --force --deep --sign "$IDENTITY" "$APP" 2>/dev/null; then
     echo "Signed with: $IDENTITY"
 else
-    echo "warning: '$IDENTITY' identity not found; ad-hoc signing (permission must be re-granted each build)" >&2
+    echo "warning: '$IDENTITY' identity unavailable; ad-hoc signing (permission must be re-granted each build)" >&2
     codesign --force --deep --sign - "$APP"
 fi
 echo "Bundled: $APP"
