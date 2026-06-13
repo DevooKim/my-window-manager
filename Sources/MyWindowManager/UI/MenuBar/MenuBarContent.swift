@@ -21,9 +21,14 @@ struct MenuBarContent: View {
             Color.clear.frame(width: 0, height: 0)
                 .onAppear {
                     app.openEditorWindow = { openWindow(id: AppState.editorWindowID) }
+                    app.openUpdateWindow = { openWindow(id: UpdatePromptState.windowID) }
+                    app.openAboutWindow = { openWindow(id: AppState.aboutWindowID) }
                 }
 
-            Button("My Window Manager 정보") { showAbout() }
+            Button("My Window Manager 정보") {
+                app.openAboutWindow?()
+                NSApp.activate(ignoringOtherApps: true)
+            }
 
             Divider()
 
@@ -83,18 +88,6 @@ struct MenuBarContent: View {
         }
     }
 
-    /// Standard About panel: bundle icon, name, version, and copyright
-    /// come from Info.plist; credits add the GitHub link.
-    private func showAbout() {
-        NSApp.activate(ignoringOtherApps: true)
-        let credits = NSMutableAttributedString(string: "github.com/DevooKim/my-window-manager")
-        credits.addAttribute(
-            .link,
-            value: "https://github.com/DevooKim/my-window-manager",
-            range: NSRange(location: 0, length: credits.length)
-        )
-        NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
-    }
 
     private func menuTitle(_ name: String, hotkey: HotkeyConfig?) -> String {
         if let h = hotkey { return "\(name)   \(h.displayString)" }

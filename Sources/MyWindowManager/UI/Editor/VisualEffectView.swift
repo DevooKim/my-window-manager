@@ -22,6 +22,10 @@ struct VisualEffectView: NSViewRepresentable {
     var makesHostWindowTransparent: Bool = false
     /// true면 위에 얹힌 텍스트가 vibrancy로 흐려지지 않게 한다.
     var disablesVibrancy: Bool = false
+    /// 0보다 크면 호스트 창 contentView를 이 radius로 둥글게 클립한다. 투명 창은
+    /// 시스템 윈도우 모서리 마스크가 적용되지 않아, 타이틀바 영역까지 포함해
+    /// 직접 깎아야 모서리가 둥글게 보인다.
+    var hostWindowCornerRadius: CGFloat = 0
 
     func makeNSView(context: Context) -> NSVisualEffectView {
         let view = disablesVibrancy ? NonVibrantEffectView() : NSVisualEffectView()
@@ -35,11 +39,19 @@ struct VisualEffectView: NSViewRepresentable {
         view.material = material
         view.blendingMode = blendingMode
         view.state = state
-        guard makesHostWindowTransparent else { return }
+        guard makesHostWindowTransparent || hostWindowCornerRadius > 0 else { return }
         DispatchQueue.main.async {
             guard let window = view.window else { return }
-            window.isOpaque = false
-            window.backgroundColor = .clear
+            if makesHostWindowTransparent {
+                window.isOpaque = false
+                window.backgroundColor = .clear
+            }
+            if hostWindowCornerRadius > 0, let content = window.contentView {
+                content.wantsLayer = true
+                content.layer?.cornerRadius = hostWindowCornerRadius
+                content.layer?.cornerCurve = .continuous
+                content.layer?.masksToBounds = true
+            }
         }
     }
 }

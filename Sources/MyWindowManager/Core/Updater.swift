@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 
 /// Checks GitHub Releases for a newer version and, on the user's confirm,
 /// downloads the zip, swaps the running .app in place, and relaunches.
@@ -64,7 +65,7 @@ enum Updater {
             return
         }
 
-        let proceed = confirmUpdate(from: current, to: remote, notes: release.body)
+        let proceed = await confirmUpdate(from: current, to: remote, notes: release.body)
         guard proceed else { return }
         await downloadAndInstall(url: asset, version: remote)
     }
@@ -159,15 +160,30 @@ enum Updater {
 
     // MARK: UI
 
-    private static func confirmUpdate(from: SemanticVersion, to: SemanticVersion, notes: String) -> Bool {
-        let alert = NSAlert()
-        alert.messageText = "버전 \(to.description)을(를) 사용할 수 있습니다"
-        let trimmed = notes.split(separator: "\n").prefix(12).joined(separator: "\n")
-        alert.informativeText = "현재 \(from.description) → \(to.description)\n\n\(trimmed)"
-        alert.addButton(withTitle: "지금 업데이트")
-        alert.addButton(withTitle: "나중에")
+    /// Injected from the app so the updater can drive the SwiftUI window scene.
+    static var promptState: UpdatePromptState?
+    static var openWindow: (() -> Void)?
+
+    /// Asks the user whether to install the available update, rendering the
+    /// release notes in the SwiftUI window. Suspends until they choose.
+    private static func confirmUpdate(from: SemanticVersion, to: SemanticVersion, notes: String) async -> Bool {
+        let action = await presentPrompt(
+            kind: .available(from: from, to: to),
+            notes: notes
+        )
+        return action == .update
+    }
+
+    /// Sets the prompt on the shared state, opens the SwiftUI window, and
+    /// suspends until the user acts on it (button press or closing the window).
+    private static func presentPrompt(
+        kind: UpdatePromptView.Kind,
+        notes: String
+    ) async -> UpdatePromptView.Action {
+        guard let promptState else { return .dismiss }
+        openWindow?()
         NSApp.activate(ignoringOtherApps: true)
-        return alert.runModal() == .alertFirstButtonReturn
+        return await promptState.present(kind: kind, notes: notes)
     }
 
     private static func showInfo(title: String, text: String) {

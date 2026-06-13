@@ -4,6 +4,8 @@ import AppKit
 /// "정보" tab — app icon, version, update check, and links.
 /// Mirrors the centered About-panel layout used in My AltTab.
 struct InfoView: View {
+    private static let repoURL = URL(string: "https://github.com/DevooKim/my-window-manager")!
+
     private static func bundleString(_ key: String) -> String {
         Bundle.main.object(forInfoDictionaryKey: key) as? String ?? "dev"
     }
@@ -21,8 +23,10 @@ struct InfoView: View {
                 Updater.checkForUpdates(silent: false)
             }
             .padding(.top, 4)
-            Link("GitHub",
-                 destination: URL(string: "https://github.com/DevooKim/my-window-manager")!)
+            Button("GitHub") {
+                NSWorkspace.shared.open(Self.repoURL)
+            }
+            .buttonStyle(.link)
             Text(Self.bundleString("NSHumanReadableCopyright"))
                 .font(.caption)
                 .foregroundColor(.secondary)

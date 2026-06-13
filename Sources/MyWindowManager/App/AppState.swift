@@ -5,6 +5,8 @@ import AppKit
 final class AppState: ObservableObject {
     /// Scene id for the SwiftUI-owned settings window.
     static let editorWindowID = "editor"
+    /// Scene id for the SwiftUI-owned About window (menu bar "정보").
+    static let aboutWindowID = "about"
 
     @Published var openedEditor: EditorTab? = nil
     @Published var selectedTab: EditorTab = .presets
@@ -13,6 +15,10 @@ final class AppState: ObservableObject {
     /// Injected from the SwiftUI scene so AppKit-side callers (menu bar,
     /// hotkeys) can open the editor window through SwiftUI's openWindow action.
     var openEditorWindow: (() -> Void)?
+    /// Injected so the Updater can open the SwiftUI update window scene.
+    var openUpdateWindow: (() -> Void)?
+    /// Injected so the menu bar can open the SwiftUI About window scene.
+    var openAboutWindow: (() -> Void)?
 
     private var onboardingWindow: NSWindow?
 

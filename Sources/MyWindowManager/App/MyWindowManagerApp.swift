@@ -30,6 +30,28 @@ struct MyWindowManagerApp: App {
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentMinSize)
         .defaultSize(width: 980, height: 680)
+
+        // 업데이트 알림 창. Updater가 UpdatePromptState에 프롬프트를 설정한 뒤
+        // openUpdateWindow 액션으로 이 창을 연다.
+        Window("", id: UpdatePromptState.windowID) {
+            UpdateWindowRoot()
+                .environmentObject(delegate.updatePrompt)
+                .environmentObject(delegate.app)
+        }
+        .windowStyle(.hiddenTitleBar)
+        .windowResizability(.contentSize)
+        .defaultPosition(.center)
+
+        // 정보 창(메뉴바 "정보"). 표준 AppKit About 패널 대신 SwiftUI InfoView를
+        // 띄워 GitHub 링크가 실제로 클릭되게 한다.
+        Window("My Window Manager 정보", id: AppState.aboutWindowID) {
+            InfoView()
+                .frame(width: 320)
+                .environmentObject(delegate.app)
+        }
+        .windowStyle(.hiddenTitleBar)
+        .windowResizability(.contentSize)
+        .defaultPosition(.center)
     }
 }
 
@@ -40,6 +62,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     let ax = AccessibilityManager.shared
     let hotkeys = HotkeyRegistryHolder()
     let app = AppState()
+    let updatePrompt = UpdatePromptState()
 
     private var cancellables = Set<AnyCancellable>()
 
@@ -49,6 +72,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         app.ax = ax
         app.hotkeys = hotkeys
         hotkeys.registry.bind(store: store)
+
+        // 업데이트 창(SwiftUI scene)을 Updater와 연결한다.
+        Updater.promptState = updatePrompt
+        Updater.openWindow = { [weak app] in app?.openUpdateWindow?() }
 
         store.objectWillChange
             .receive(on: DispatchQueue.main)
