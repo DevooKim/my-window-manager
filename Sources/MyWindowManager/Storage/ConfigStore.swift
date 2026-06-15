@@ -3,20 +3,23 @@ import Carbon.HIToolbox
 import Combine
 
 struct AppConfig: Codable {
-    var version: Int = 1
+    var version: Int = 2
     var presets: [ResizePreset]
     var layouts: [Layout]
     var cycles: [PresetCycle]
     var deadzones: [DisplayDeadzone]
     var cycleHUDStyle: CycleHUDStyle
+    var moveBindings: [MoveBinding]
 
     init(presets: [ResizePreset], layouts: [Layout], cycles: [PresetCycle],
-         deadzones: [DisplayDeadzone], cycleHUDStyle: CycleHUDStyle = .thumbnails) {
+         deadzones: [DisplayDeadzone], cycleHUDStyle: CycleHUDStyle = .thumbnails,
+         moveBindings: [MoveBinding] = []) {
         self.presets = presets
         self.layouts = layouts
         self.cycles = cycles
         self.deadzones = deadzones
         self.cycleHUDStyle = cycleHUDStyle
+        self.moveBindings = moveBindings
     }
 
     init(from decoder: Decoder) throws {
@@ -30,6 +33,8 @@ struct AppConfig: Codable {
         deadzones = try c.decodeIfPresent([DisplayDeadzone].self, forKey: .deadzones) ?? []
         // `cycleHUDStyle` added later too — default to thumbnails.
         cycleHUDStyle = try c.decodeIfPresent(CycleHUDStyle.self, forKey: .cycleHUDStyle) ?? .thumbnails
+        // `moveBindings` added in v2 — default to empty for older configs.
+        moveBindings = try c.decodeIfPresent([MoveBinding].self, forKey: .moveBindings) ?? []
     }
 }
 
@@ -43,6 +48,9 @@ final class ConfigStore: ObservableObject {
     }
     @Published var cycleHUDStyle: CycleHUDStyle = .thumbnails {
         didSet { if cycleHUDStyle != oldValue { save() } }
+    }
+    @Published var moveBindings: [MoveBinding] = [] {
+        didSet { if moveBindings != oldValue { save() } }
     }
 
     /// Push the current deadzones into `ScreenHelper` so the appliers see them.
@@ -75,6 +83,7 @@ final class ConfigStore: ObservableObject {
             self.cycles = cfg.cycles
             self.deadzones = cfg.deadzones
             self.cycleHUDStyle = cfg.cycleHUDStyle
+            self.moveBindings = cfg.moveBindings
             self.needsSetup = false
         } else {
             // First launch — wait for the user to choose a starter scheme.
@@ -82,6 +91,7 @@ final class ConfigStore: ObservableObject {
             self.layouts = []
             self.cycles = []
             self.deadzones = []
+            self.moveBindings = []
             self.needsSetup = true
         }
         syncDeadzones()
@@ -109,7 +119,7 @@ final class ConfigStore: ObservableObject {
     }
 
     func save() {
-        let cfg = AppConfig(presets: presets, layouts: layouts, cycles: cycles, deadzones: deadzones, cycleHUDStyle: cycleHUDStyle)
+        let cfg = AppConfig(presets: presets, layouts: layouts, cycles: cycles, deadzones: deadzones, cycleHUDStyle: cycleHUDStyle, moveBindings: moveBindings)
         let enc = JSONEncoder()
         enc.outputFormatting = [.prettyPrinted, .sortedKeys]
         guard let data = try? enc.encode(cfg) else { return }
@@ -134,7 +144,7 @@ final class ConfigStore: ObservableObject {
 
     /// Write the full configuration (presets, cycles, layouts) to a file.
     func export(to fileURL: URL) throws {
-        let cfg = AppConfig(presets: presets, layouts: layouts, cycles: cycles, deadzones: deadzones, cycleHUDStyle: cycleHUDStyle)
+        let cfg = AppConfig(presets: presets, layouts: layouts, cycles: cycles, deadzones: deadzones, cycleHUDStyle: cycleHUDStyle, moveBindings: moveBindings)
         let enc = JSONEncoder()
         enc.outputFormatting = [.prettyPrinted, .sortedKeys]
         guard let data = try? enc.encode(cfg) else { throw ConfigIOError.encodeFailed }
@@ -153,6 +163,7 @@ final class ConfigStore: ObservableObject {
         cycles = cfg.cycles
         deadzones = cfg.deadzones
         cycleHUDStyle = cfg.cycleHUDStyle
+        moveBindings = cfg.moveBindings
         needsSetup = false
         save()
     }
@@ -271,6 +282,14 @@ final class ConfigStore: ObservableObject {
         }
         for l in layouts where l.id != excludingId && matches(l.hotkey) {
             result.append("\(l.name) (레이아웃)")
+        }
+        // 이동 액션은 UUID가 아니라 자기 제외가 불가능하므로, 같은 combo를 가진
+        // 이동 바인딩이 2개 이상일 때만(서로 충돌) 표시한다.
+        let movesWithSame = moveBindings.filter { matches($0.hotkey) }
+        if movesWithSame.count > 1 {
+            for b in movesWithSame {
+                result.append("\(b.action.label) (이동)")
+            }
         }
         return result
     }

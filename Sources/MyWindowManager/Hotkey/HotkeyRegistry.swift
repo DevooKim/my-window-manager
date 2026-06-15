@@ -8,6 +8,7 @@ final class HotkeyRegistry {
         case preset(UUID)
         case layout(UUID)
         case cycle(UUID)
+        case move(MoveAction)
     }
 
     private var hotkeys: [(Target, HotKey)] = []
@@ -76,6 +77,21 @@ final class HotkeyRegistry {
                 self?.advanceCycle(id: id)
             }
             hotkeys.append((.cycle(id), key))
+        }
+
+        for binding in store.moveBindings {
+            guard let cfg = binding.hotkey, let hk = cfg.hotKey else { continue }
+            let key = HotKey(key: hk.key, modifiers: hk.mods)
+            let action = binding.action
+            key.keyDownHandler = { [weak self] in
+                self?.resetCycleState()
+                if action.isSpace {
+                    SpaceMover.move(direction: action.direction)
+                } else {
+                    DisplayMover.move(direction: action.direction)
+                }
+            }
+            hotkeys.append((.move(action), key))
         }
     }
 

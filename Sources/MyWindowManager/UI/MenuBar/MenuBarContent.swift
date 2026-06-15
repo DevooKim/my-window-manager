@@ -63,6 +63,22 @@ struct MenuBarContent: View {
                 }
             }
 
+            let moves = store.moveBindings.filter { $0.hotkey != nil }
+            if !moves.isEmpty {
+                Divider()
+                Section("이동") {
+                    ForEach(moves) { binding in
+                        Button(menuTitle(binding.action.label, hotkey: binding.hotkey)) {
+                            if binding.action.isSpace {
+                                SpaceMover.move(direction: binding.action.direction)
+                            } else {
+                                DisplayMover.move(direction: binding.action.direction)
+                            }
+                        }
+                    }
+                }
+            }
+
             Divider()
 
             Button("업데이트 확인...") { Updater.checkForUpdates(silent: false) }
