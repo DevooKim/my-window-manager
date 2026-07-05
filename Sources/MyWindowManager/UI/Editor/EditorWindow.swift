@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum EditorTab: String, CaseIterable, Identifiable {
-    case presets, cycles, layouts, displays, move, general, info
+    case presets, cycles, layouts, displays, move, snap, general, info
     var id: String { rawValue }
 
     var label: String {
@@ -11,6 +11,7 @@ enum EditorTab: String, CaseIterable, Identifiable {
         case .layouts: return "Layouts"
         case .displays: return "Displays"
         case .move: return "이동·크기"
+        case .snap: return "스냅"
         case .general: return "일반"
         case .info: return "정보"
         }
@@ -24,6 +25,7 @@ enum EditorTab: String, CaseIterable, Identifiable {
         case .layouts: return "rectangle.3.group"
         case .displays: return "display"
         case .move: return "arrow.left.arrow.right"
+        case .snap: return "rectangle.lefthalf.filled"
         case .general: return "gearshape"
         case .info: return "info.circle"
         }
@@ -37,6 +39,7 @@ enum EditorTab: String, CaseIterable, Identifiable {
         case .layouts: return .indigo
         case .displays: return .teal
         case .move: return .orange
+        case .snap: return .pink
         case .general: return .gray
         case .info: return .green
         }
@@ -47,7 +50,7 @@ enum EditorTab: String, CaseIterable, Identifiable {
     var hasTranslucentDetail: Bool {
         switch self {
         case .info: return true
-        case .presets, .cycles, .layouts, .displays, .move, .general: return false
+        case .presets, .cycles, .layouts, .displays, .move, .snap, .general: return false
         }
     }
 }
@@ -110,6 +113,7 @@ struct EditorRootView: View {
         case .layouts: LayoutEditorView()
         case .displays: DisplayDeadzoneView()
         case .move: MoveView()
+        case .snap: SnapView()
         case .general: GeneralView()
         case .info: InfoView()
         }
