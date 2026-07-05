@@ -29,6 +29,18 @@ enum ScreenHelper {
         )
     }
 
+    /// AX 좌표(좌상단 원점)의 rect를 Cocoa 좌표(좌하단 원점)로 되돌린다.
+    /// `axVisibleFrame`의 역변환 — NSWindow/NSPanel 배치용.
+    static func cocoaRect(fromAX rect: CGRect) -> CGRect {
+        guard let primary = NSScreen.screens.first else { return rect }
+        return CGRect(
+            x: rect.minX,
+            y: primary.frame.maxY - rect.maxY,
+            width: rect.width,
+            height: rect.height
+        )
+    }
+
     /// The usable area windows are placed into — `axVisibleFrame` with this
     /// display's deadzone insets applied. Use this from the appliers; use the
     /// raw `axVisibleFrame` for hit-testing (`screen(containing:)`) so windows
