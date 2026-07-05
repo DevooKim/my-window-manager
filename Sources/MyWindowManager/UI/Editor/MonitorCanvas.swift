@@ -7,6 +7,9 @@ let snapSteps: [Double] = [0, 1.0/4, 1.0/3, 0.5, 2.0/3, 3.0/4, 1.0]
 /// while the user is dragging so they can see what their region will snap to.
 struct SnapGrid: View {
     let canvas: CGSize
+    /// 스냅이 걸린 기준선(canvas 좌표). 지정되면 해당 선을 강조 색으로 그린다.
+    var activeX: CGFloat? = nil
+    var activeY: CGFloat? = nil
 
     var body: some View {
         Canvas { ctx, _ in
@@ -24,6 +27,20 @@ struct SnapGrid: View {
                 with: .color(Color.accentColor.opacity(0.5)),
                 style: StrokeStyle(lineWidth: 1, dash: [4, 4])
             )
+
+            // 스냅이 걸린 기준선은 실선으로 덧그려 어디에 붙었는지 보여준다.
+            var active = Path()
+            if let x = activeX {
+                active.move(to: CGPoint(x: x, y: 0))
+                active.addLine(to: CGPoint(x: x, y: canvas.height))
+            }
+            if let y = activeY {
+                active.move(to: CGPoint(x: 0, y: y))
+                active.addLine(to: CGPoint(x: canvas.width, y: y))
+            }
+            if !active.isEmpty {
+                ctx.stroke(active, with: .color(.orange), style: StrokeStyle(lineWidth: 1.5))
+            }
         }
         .frame(width: canvas.width, height: canvas.height)
         .allowsHitTesting(false)
@@ -60,6 +77,9 @@ struct MonitorCanvas: View {
     @State private var dragStart: RelativeFrame?
     @State private var dragStartPoint: CGPoint?
     @State private var isDragging = false
+    /// 이동 드래그에서 스냅이 걸린 기준선(canvas 좌표) — SnapGrid가 강조해 그린다.
+    @State private var activeSnapX: CGFloat?
+    @State private var activeSnapY: CGFloat?
 
     private var aspect: CGFloat {
         guard monitorPixelSize.height > 0 else { return 16.0 / 10.0 }
@@ -90,7 +110,7 @@ struct MonitorCanvas: View {
 
                 // Snap grid — only while dragging with snap on
                 if snap && isDragging {
-                    SnapGrid(canvas: canvas)
+                    SnapGrid(canvas: canvas, activeX: activeSnapX, activeY: activeSnapY)
                         .offset(x: origin.x, y: origin.y)
                 }
 
@@ -239,18 +259,23 @@ struct MonitorCanvas: View {
                 var newX = clamp(startX + dxMon, b.minX, max(b.minX, b.maxX - w))
                 var newY = clamp(startY + dyMon, b.minY, max(b.minY, b.maxY - h))
                 if snap {
-                    newX = clamp(snapMovePosition(newX, size: w, center: b.midX,
-                                                  total: monitorPixelSize.width),
-                                 b.minX, max(b.minX, b.maxX - w))
-                    newY = clamp(snapMovePosition(newY, size: h, center: b.midY,
-                                                  total: monitorPixelSize.height),
-                                 b.minY, max(b.minY, b.maxY - h))
+                    let rx = snapMovePosition(newX, size: w, center: b.midX,
+                                              total: monitorPixelSize.width)
+                    let ry = snapMovePosition(newY, size: h, center: b.midY,
+                                              total: monitorPixelSize.height)
+                    newX = clamp(rx.value, b.minX, max(b.minX, b.maxX - w))
+                    newY = clamp(ry.value, b.minY, max(b.minY, b.maxY - h))
+                    activeSnapX = rx.line.map { $0 * canvas.width / max(1, monitorPixelSize.width) }
+                    activeSnapY = ry.line.map { $0 * canvas.height / max(1, monitorPixelSize.height) }
                 }
                 area.x = unitPosX(start.x, monitorPx: newX)
                 area.y = unitPosY(start.y, monitorPx: newY)
                 onChange?()
             }
-            .onEnded { _ in dragStart = nil; isDragging = false }
+            .onEnded { _ in
+                dragStart = nil; isDragging = false
+                activeSnapX = nil; activeSnapY = nil
+            }
     }
 
     @ViewBuilder
@@ -331,13 +356,21 @@ struct MonitorCanvas: View {
     }
 
     /// 이동 스냅: 상자 중앙이 usable 영역 중앙에 가까우면 중앙 정렬을 우선하고,
-    /// 아니면 기존 엣지 분수 스냅을 적용한다.
+    /// 아니면 기존 엣지 분수 스냅을 적용한다. `line`은 스냅이 걸린 기준선의
+    /// 모니터 px 좌표 — 캔버스가 강조선을 그리는 데 쓴다(스냅 없으면 nil).
     private func snapMovePosition(_ v: CGFloat, size: CGFloat,
-                                  center: CGFloat, total: CGFloat) -> CGFloat {
+                                  center: CGFloat, total: CGFloat)
+        -> (value: CGFloat, line: CGFloat?) {
         let tolerance = 0.03 * max(1, total)
         let centered = center - size / 2
-        if abs(v - centered) < tolerance { return centered }
-        return snapValue(v, total: total)
+        if abs(v - centered) < tolerance { return (centered, center) }
+        let frac = v / max(1, total)
+        if let snapped = snapSteps.min(by: { abs($0 - Double(frac)) < abs($1 - Double(frac)) }),
+           abs(snapped - Double(frac)) < 0.03 {
+            let pos = CGFloat(snapped) * total
+            return (pos, pos)
+        }
+        return (v, nil)
     }
 
     private func snapValue(_ v: CGFloat, total: CGFloat) -> CGFloat {
