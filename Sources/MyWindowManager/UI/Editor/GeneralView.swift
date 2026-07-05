@@ -8,13 +8,24 @@ struct GeneralView: View {
     @EnvironmentObject var store: ConfigStore
     @EnvironmentObject var hotkeys: HotkeyRegistryHolder
     @AppStorage(AppState.showMenuBarIconKey) private var showMenuBarIcon = true
+    @State private var launchAtLogin = LoginItemManager.isEnabled
 
     var body: some View {
         Form {
             Section {
+                Toggle("맥 시작 시 자동 실행", isOn: $launchAtLogin)
+                    .onChange(of: launchAtLogin) { _, newValue in
+                        guard newValue != LoginItemManager.isEnabled else { return }
+                        do {
+                            try LoginItemManager.setEnabled(newValue)
+                        } catch {
+                            launchAtLogin = LoginItemManager.isEnabled
+                            presentError(error, title: newValue ? "자동 실행 등록 실패" : "자동 실행 해제 실패")
+                        }
+                    }
                 Toggle("헤더메뉴 아이콘 표시", isOn: $showMenuBarIcon)
             } footer: {
-                Text("끄면 상태 막대 아이콘이 사라집니다. 다시 표시하려면 앱을 한 번 더 실행하세요 — 설정 창이 열리고 아이콘이 돌아옵니다.")
+                Text("자동 실행은 시스템 설정 > 일반 > 로그인 항목에서도 켜고 끌 수 있습니다. 헤더메뉴 아이콘을 끄면 상태 막대 아이콘이 사라집니다 — 다시 표시하려면 앱을 한 번 더 실행하세요.")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -44,6 +55,7 @@ struct GeneralView: View {
                     .foregroundColor(.secondary)
             }
         }
+        .onAppear { launchAtLogin = LoginItemManager.isEnabled }
         .formStyle(.grouped)
     }
 
