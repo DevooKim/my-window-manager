@@ -73,6 +73,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     let app = AppState()
     let updatePrompt = UpdatePromptState()
 
+    private var snapMonitor: DragSnapMonitor?
     private var cancellables = Set<AnyCancellable>()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -90,6 +91,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] in
                 DispatchQueue.main.async { self?.hotkeys.registry.rebuild() }
+            }
+            .store(in: &cancellables)
+
+        // 드래그 스냅 — 설정과 접근성 권한 변화에 맞춰 시작/중지.
+        snapMonitor = DragSnapMonitor(settings: store.snapSettings)
+        store.$snapSettings
+            .combineLatest(ax.$isTrusted)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] settings, trusted in
+                self?.snapMonitor?.update(settings: settings, axTrusted: trusted)
             }
             .store(in: &cancellables)
 
