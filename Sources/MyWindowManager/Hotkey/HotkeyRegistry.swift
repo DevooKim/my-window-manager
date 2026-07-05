@@ -9,6 +9,7 @@ final class HotkeyRegistry {
         case layout(UUID)
         case cycle(UUID)
         case move(MoveAction)
+        case size(SizeAction)
     }
 
     private var hotkeys: [(Target, HotKey)] = []
@@ -92,6 +93,18 @@ final class HotkeyRegistry {
                 }
             }
             hotkeys.append((.move(action), key))
+        }
+
+        for binding in store.sizeBindings {
+            guard let cfg = binding.hotkey, let hk = cfg.hotKey else { continue }
+            let key = HotKey(key: hk.key, modifiers: hk.mods)
+            let action = binding.action
+            key.keyDownHandler = { [weak self, weak store] in
+                guard let store else { return }
+                self?.resetCycleState()
+                WindowSizer.step(action, ratio: store.sizeStepRatio)
+            }
+            hotkeys.append((.size(action), key))
         }
     }
 
