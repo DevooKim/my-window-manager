@@ -3,23 +3,32 @@ import Carbon.HIToolbox
 import Combine
 
 struct AppConfig: Codable {
-    var version: Int = 2
+    var version: Int = 3
     var presets: [ResizePreset]
     var layouts: [Layout]
     var cycles: [PresetCycle]
     var deadzones: [DisplayDeadzone]
     var cycleHUDStyle: CycleHUDStyle
     var moveBindings: [MoveBinding]
+    var snapSettings: SnapSettings
+    var sizeBindings: [SizeBinding]
+    var sizeStepRatio: Double
 
     init(presets: [ResizePreset], layouts: [Layout], cycles: [PresetCycle],
          deadzones: [DisplayDeadzone], cycleHUDStyle: CycleHUDStyle = .thumbnails,
-         moveBindings: [MoveBinding] = []) {
+         moveBindings: [MoveBinding] = [],
+         snapSettings: SnapSettings = SnapSettings(),
+         sizeBindings: [SizeBinding] = [],
+         sizeStepRatio: Double = 0.1) {
         self.presets = presets
         self.layouts = layouts
         self.cycles = cycles
         self.deadzones = deadzones
         self.cycleHUDStyle = cycleHUDStyle
         self.moveBindings = moveBindings
+        self.snapSettings = snapSettings
+        self.sizeBindings = sizeBindings
+        self.sizeStepRatio = sizeStepRatio
     }
 
     init(from decoder: Decoder) throws {
@@ -35,6 +44,10 @@ struct AppConfig: Codable {
         cycleHUDStyle = try c.decodeIfPresent(CycleHUDStyle.self, forKey: .cycleHUDStyle) ?? .thumbnails
         // `moveBindings` added in v2 — default to empty for older configs.
         moveBindings = try c.decodeIfPresent([MoveBinding].self, forKey: .moveBindings) ?? []
+        // v3: 드래그 스냅 + 창 확대/축소.
+        snapSettings = try c.decodeIfPresent(SnapSettings.self, forKey: .snapSettings) ?? SnapSettings()
+        sizeBindings = try c.decodeIfPresent([SizeBinding].self, forKey: .sizeBindings) ?? []
+        sizeStepRatio = try c.decodeIfPresent(Double.self, forKey: .sizeStepRatio) ?? 0.1
     }
 }
 
@@ -51,6 +64,16 @@ final class ConfigStore: ObservableObject {
     }
     @Published var moveBindings: [MoveBinding] = [] {
         didSet { if moveBindings != oldValue { save() } }
+    }
+    @Published var snapSettings: SnapSettings = SnapSettings() {
+        didSet { if snapSettings != oldValue { save() } }
+    }
+    @Published var sizeBindings: [SizeBinding] = [] {
+        didSet { if sizeBindings != oldValue { save() } }
+    }
+    /// 창 확대/축소 스텝 — 화면 크기 대비 비율(0.02~0.30).
+    @Published var sizeStepRatio: Double = 0.1 {
+        didSet { if sizeStepRatio != oldValue { save() } }
     }
 
     /// Push the current deadzones into `ScreenHelper` so the appliers see them.
@@ -84,6 +107,9 @@ final class ConfigStore: ObservableObject {
             self.deadzones = cfg.deadzones
             self.cycleHUDStyle = cfg.cycleHUDStyle
             self.moveBindings = cfg.moveBindings
+            self.snapSettings = cfg.snapSettings
+            self.sizeBindings = cfg.sizeBindings
+            self.sizeStepRatio = cfg.sizeStepRatio
             self.needsSetup = false
         } else {
             // First launch — wait for the user to choose a starter scheme.
@@ -92,6 +118,9 @@ final class ConfigStore: ObservableObject {
             self.cycles = []
             self.deadzones = []
             self.moveBindings = []
+            self.snapSettings = SnapSettings()
+            self.sizeBindings = []
+            self.sizeStepRatio = 0.1
             self.needsSetup = true
         }
         syncDeadzones()
@@ -119,7 +148,10 @@ final class ConfigStore: ObservableObject {
     }
 
     func save() {
-        let cfg = AppConfig(presets: presets, layouts: layouts, cycles: cycles, deadzones: deadzones, cycleHUDStyle: cycleHUDStyle, moveBindings: moveBindings)
+        let cfg = AppConfig(presets: presets, layouts: layouts, cycles: cycles,
+                            deadzones: deadzones, cycleHUDStyle: cycleHUDStyle,
+                            moveBindings: moveBindings, snapSettings: snapSettings,
+                            sizeBindings: sizeBindings, sizeStepRatio: sizeStepRatio)
         let enc = JSONEncoder()
         enc.outputFormatting = [.prettyPrinted, .sortedKeys]
         guard let data = try? enc.encode(cfg) else { return }
@@ -144,7 +176,10 @@ final class ConfigStore: ObservableObject {
 
     /// Write the full configuration (presets, cycles, layouts) to a file.
     func export(to fileURL: URL) throws {
-        let cfg = AppConfig(presets: presets, layouts: layouts, cycles: cycles, deadzones: deadzones, cycleHUDStyle: cycleHUDStyle, moveBindings: moveBindings)
+        let cfg = AppConfig(presets: presets, layouts: layouts, cycles: cycles,
+                            deadzones: deadzones, cycleHUDStyle: cycleHUDStyle,
+                            moveBindings: moveBindings, snapSettings: snapSettings,
+                            sizeBindings: sizeBindings, sizeStepRatio: sizeStepRatio)
         let enc = JSONEncoder()
         enc.outputFormatting = [.prettyPrinted, .sortedKeys]
         guard let data = try? enc.encode(cfg) else { throw ConfigIOError.encodeFailed }
@@ -164,6 +199,9 @@ final class ConfigStore: ObservableObject {
         deadzones = cfg.deadzones
         cycleHUDStyle = cfg.cycleHUDStyle
         moveBindings = cfg.moveBindings
+        snapSettings = cfg.snapSettings
+        sizeBindings = cfg.sizeBindings
+        sizeStepRatio = cfg.sizeStepRatio
         needsSetup = false
         save()
     }
@@ -283,13 +321,17 @@ final class ConfigStore: ObservableObject {
         for l in layouts where l.id != excludingId && matches(l.hotkey) {
             result.append("\(l.name) (레이아웃)")
         }
-        // 이동 액션은 UUID가 아니라 자기 제외가 불가능하므로, 같은 combo를 가진
-        // 이동 바인딩이 2개 이상일 때만(서로 충돌) 표시한다.
-        let movesWithSame = moveBindings.filter { matches($0.hotkey) }
-        if movesWithSame.count > 1 {
-            for b in movesWithSame {
-                result.append("\(b.action.label) (이동)")
-            }
+        // 이동/크기 액션은 UUID가 없어 자기 제외가 불가능하므로, 같은 combo를
+        // 가진 고정 액션 바인딩이 2개 이상일 때만(서로 충돌) 표시한다.
+        var fixed: [String] = []
+        for b in moveBindings where matches(b.hotkey) {
+            fixed.append("\(b.action.label) (이동)")
+        }
+        for b in sizeBindings where matches(b.hotkey) {
+            fixed.append("\(b.action.label) (크기)")
+        }
+        if fixed.count > 1 {
+            result.append(contentsOf: fixed)
         }
         return result
     }
