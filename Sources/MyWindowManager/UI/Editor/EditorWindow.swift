@@ -10,7 +10,7 @@ enum EditorTab: String, CaseIterable, Identifiable {
         case .cycles: return "Cycles"
         case .layouts: return "Layouts"
         case .displays: return "Displays"
-        case .move: return "이동"
+        case .move: return "이동·크기"
         case .general: return "일반"
         case .info: return "정보"
         }

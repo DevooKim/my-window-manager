@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// "이동" 탭 — 포커스 창을 인접 디스플레이/스페이스로 옮기는 액션의 핫키 설정.
+/// "이동·크기" 탭 — 포커스 창을 인접 디스플레이/스페이스로 옮기는 액션과
+/// 창 확대/축소 액션의 핫키 설정.
 struct MoveView: View {
     @EnvironmentObject var store: ConfigStore
     @EnvironmentObject var hotkeys: HotkeyRegistryHolder
@@ -21,6 +22,25 @@ struct MoveView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
+            Section {
+                sizeRow(.grow)
+                sizeRow(.shrink)
+                HStack {
+                    Text("확대/축소 비율")
+                    Spacer()
+                    Text("\(stepPercent.wrappedValue)%")
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                    Stepper("", value: stepPercent, in: 2...30, step: 1)
+                        .labelsHidden()
+                }
+            } header: {
+                Text("창 크기")
+            } footer: {
+                Text("한 번 누를 때마다 화면 크기의 위 비율만큼 창이 커지거나 작아집니다. 기준점은 창 중심입니다.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
         }
         .formStyle(.grouped)
     }
@@ -28,6 +48,19 @@ struct MoveView: View {
     @ViewBuilder
     private func row(_ action: MoveAction) -> some View {
         let binding = hotkeyBinding(for: action)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(action.label)
+                Spacer()
+                HotkeyCaptureView(hotkey: binding)
+            }
+            HotkeyConflictWarning(hotkey: binding.wrappedValue, selfId: nil)
+        }
+    }
+
+    @ViewBuilder
+    private func sizeRow(_ action: SizeAction) -> some View {
+        let binding = sizeHotkeyBinding(for: action)
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(action.label)
@@ -52,6 +85,30 @@ struct MoveView: View {
                 store.moveBindings = list
                 hotkeys.registry.rebuild()
             }
+        )
+    }
+
+    private func sizeHotkeyBinding(for action: SizeAction) -> Binding<HotkeyConfig?> {
+        Binding(
+            get: { store.sizeBindings.first { $0.action == action }?.hotkey },
+            set: { newValue in
+                var list = store.sizeBindings
+                if let i = list.firstIndex(where: { $0.action == action }) {
+                    list[i].hotkey = newValue
+                } else {
+                    list.append(SizeBinding(action: action, hotkey: newValue))
+                }
+                store.sizeBindings = list
+                hotkeys.registry.rebuild()
+            }
+        )
+    }
+
+    /// sizeStepRatio(0.02~0.30)를 % 정수로 노출.
+    private var stepPercent: Binding<Int> {
+        Binding(
+            get: { Int((store.sizeStepRatio * 100).rounded()) },
+            set: { store.sizeStepRatio = Double($0) / 100 }
         )
     }
 }
