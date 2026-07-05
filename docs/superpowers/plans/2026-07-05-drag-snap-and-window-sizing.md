@@ -11,113 +11,86 @@
 **스펙:** `docs/superpowers/specs/2026-07-05-drag-snap-and-window-sizing-design.md`
 
 **중요 — 프로젝트 규칙:**
-- 빌드: `swift build`, 테스트: `swift test`, 앱 번들+실행: `make run` (저장소 루트에서).
+- 빌드: `swift build`, 테스트: `make test`, 앱 번들+실행: `make run` (저장소 루트에서).
+- 이 머신에는 Xcode 없이 Command Line Tools만 있어 **XCTest를 쓸 수 없다**. 테스트는 **Swift Testing**(`import Testing`, `@Test`, `#expect`)으로 작성한다. CLT용 프레임워크/링커 플래그는 Makefile `test` 타깃에 캡슐화되어 있으므로 테스트는 반드시 `make test`로 실행할 것 (`swift test` 직접 실행 금지).
+- 테스트 타깃(Package.swift tools-version 6.0 + `swiftLanguageModes: [.v5]`), Makefile `test` 타깃, sanity 테스트 1개는 이미 커밋되어 있다(911730b). Package.swift는 더 수정하지 않는다.
+- Swift Testing에서는 XCTest와 달리 CoreGraphics/Foundation이 자동으로 딸려오지 않는다 — 테스트 파일에 `import CoreGraphics`(CGRect 사용 시)나 `import Foundation`(JSONDecoder 사용 시)을 명시할 것.
 - 모든 커밋 메시지는 기존 스타일(`feat:`, `docs:`, `chore:`)을 따른다.
 - 좌표계 주의: AX(접근성)는 **좌상단 원점, y 아래로 증가**. Cocoa(NSScreen/NSEvent)는 **좌하단 원점, y 위로 증가**. 변환은 항상 primary 스크린(`NSScreen.screens.first`) 기준. 기존 `ScreenHelper.axVisibleFrame` 참고.
 
 ---
 
-### Task 1: 테스트 타깃 신설 + SizeAction 모델 + WindowSizer 계산 (TDD)
+### Task 1: SizeAction 모델 + WindowSizer 계산 (TDD)
 
 **Files:**
-- Modify: `Package.swift`
 - Create: `Tests/MyWindowManagerTests/WindowSizerTests.swift`
 - Create: `Sources/MyWindowManager/Models/SizeAction.swift`
 - Create: `Sources/MyWindowManager/Features/Resize/WindowSizer.swift`
 
-- [ ] **Step 1: Package.swift에 테스트 타깃 추가**
+(테스트 타깃/Makefile은 이미 커밋되어 있음 — Package.swift 수정 금지)
 
-`Package.swift` 전체를 다음으로 교체:
-
-```swift
-// swift-tools-version:5.9
-import PackageDescription
-
-let package = Package(
-    name: "MyWindowManager",
-    platforms: [.macOS(.v14)],
-    products: [
-        .executable(name: "MyWindowManager", targets: ["MyWindowManager"])
-    ],
-    dependencies: [
-        .package(url: "https://github.com/soffes/HotKey", from: "0.2.0")
-    ],
-    targets: [
-        .executableTarget(
-            name: "MyWindowManager",
-            dependencies: ["HotKey"],
-            path: "Sources/MyWindowManager"
-        ),
-        .testTarget(
-            name: "MyWindowManagerTests",
-            dependencies: ["MyWindowManager"],
-            path: "Tests/MyWindowManagerTests"
-        )
-    ]
-)
-```
-
-- [ ] **Step 2: 실패하는 테스트 작성**
+- [ ] **Step 1: 실패하는 테스트 작성**
 
 `Tests/MyWindowManagerTests/WindowSizerTests.swift` 생성:
 
 ```swift
-import XCTest
+import Testing
+import CoreGraphics
 @testable import MyWindowManager
 
-final class WindowSizerTests: XCTestCase {
+struct WindowSizerTests {
     // AX 좌표 기준 배치 영역 (메뉴바 아래 y=25부터 시작한다고 가정)
     let area = CGRect(x: 0, y: 25, width: 1000, height: 800)
 
-    func testGrowExpandsAroundCenter() {
+    @Test func growExpandsAroundCenter() {
         let current = CGRect(x: 400, y: 300, width: 200, height: 200)
         let r = WindowSizer.steppedFrame(current: current, area: area, ratio: 0.1, grow: true)
-        XCTAssertEqual(r.width, 300)          // 200 + 1000*0.1
-        XCTAssertEqual(r.height, 280)         // 200 + 800*0.1
-        XCTAssertEqual(r.midX, current.midX)  // 중심 유지
-        XCTAssertEqual(r.midY, current.midY)
+        #expect(r.width == 300)           // 200 + 1000*0.1
+        #expect(r.height == 280)          // 200 + 800*0.1
+        #expect(r.midX == current.midX)   // 중심 유지
+        #expect(r.midY == current.midY)
     }
 
-    func testShrinkKeepsCenter() {
+    @Test func shrinkKeepsCenter() {
         let current = CGRect(x: 300, y: 200, width: 500, height: 400)
         let r = WindowSizer.steppedFrame(current: current, area: area, ratio: 0.1, grow: false)
-        XCTAssertEqual(r.width, 400)
-        XCTAssertEqual(r.height, 320)
-        XCTAssertEqual(r.midX, current.midX)
-        XCTAssertEqual(r.midY, current.midY)
+        #expect(r.width == 400)
+        #expect(r.height == 320)
+        #expect(r.midX == current.midX)
+        #expect(r.midY == current.midY)
     }
 
-    func testGrowAtCornerIsPushedInside() {
+    @Test func growAtCornerIsPushedInside() {
         // 좌상단에 붙은 창 — 커지면 area 안쪽으로 밀려 들어와야 한다.
         let current = CGRect(x: 0, y: 25, width: 300, height: 300)
         let r = WindowSizer.steppedFrame(current: current, area: area, ratio: 0.1, grow: true)
-        XCTAssertEqual(r.minX, area.minX)
-        XCTAssertEqual(r.minY, area.minY)
-        XCTAssertEqual(r.width, 400)
-        XCTAssertEqual(r.height, 380)
+        #expect(r.minX == area.minX)
+        #expect(r.minY == area.minY)
+        #expect(r.width == 400)
+        #expect(r.height == 380)
     }
 
-    func testGrowNeverExceedsArea() {
+    @Test func growNeverExceedsArea() {
         let current = area
         let r = WindowSizer.steppedFrame(current: current, area: area, ratio: 0.1, grow: true)
-        XCTAssertEqual(r, area)
+        #expect(r == area)
     }
 
-    func testShrinkRespectsMinimumSize() {
+    @Test func shrinkRespectsMinimumSize() {
         let current = CGRect(x: 400, y: 300, width: 220, height: 160)
         let r = WindowSizer.steppedFrame(current: current, area: area, ratio: 0.1, grow: false)
-        XCTAssertEqual(r.width, WindowSizer.minWidth)    // 200
-        XCTAssertEqual(r.height, WindowSizer.minHeight)  // 150
+        #expect(r.width == WindowSizer.minWidth)    // 200
+        #expect(r.height == WindowSizer.minHeight)  // 150
     }
 }
 ```
 
-- [ ] **Step 3: 테스트 실패 확인**
+- [ ] **Step 2: 테스트 실패 확인**
 
-Run: `swift test`
-Expected: **컴파일 에러** — `cannot find 'WindowSizer' in scope` (테스트 타깃 자체는 인식되어야 한다. `no such module 'MyWindowManager'`가 나오면 Package.swift의 path/이름 오타 확인)
+Run: `make test`
+Expected: **컴파일 에러** — `cannot find 'WindowSizer' in scope`
 
-- [ ] **Step 4: 모델 + 최소 구현**
+- [ ] **Step 3: 모델 + 최소 구현**
 
 `Sources/MyWindowManager/Models/SizeAction.swift` 생성:
 
@@ -187,16 +160,16 @@ enum WindowSizer {
 }
 ```
 
-- [ ] **Step 5: 테스트 통과 확인**
+- [ ] **Step 4: 테스트 통과 확인**
 
-Run: `swift test`
-Expected: `Test Suite 'All tests' passed` — 5 tests, 0 failures
+Run: `make test`
+Expected: `Test run with 6 tests ... passed` (신규 5개 + 기존 sanity 1개), 실패 0
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add Package.swift Tests/ Sources/MyWindowManager/Models/SizeAction.swift Sources/MyWindowManager/Features/Resize/WindowSizer.swift
-git commit -m "feat: window grow/shrink calculation + test target bootstrap"
+git add Tests/MyWindowManagerTests/WindowSizerTests.swift Sources/MyWindowManager/Models/SizeAction.swift Sources/MyWindowManager/Features/Resize/WindowSizer.swift
+git commit -m "feat: window grow/shrink calculation"
 ```
 
 ---
@@ -212,45 +185,46 @@ git commit -m "feat: window grow/shrink calculation + test target bootstrap"
 `Tests/MyWindowManagerTests/SnapSettingsTests.swift` 생성:
 
 ```swift
-import XCTest
+import Testing
+import Foundation
 @testable import MyWindowManager
 
-final class SnapSettingsTests: XCTestCase {
-    func testDefaultsAreAllOn() {
+struct SnapSettingsTests {
+    @Test func defaultsAreAllOn() {
         let s = SnapSettings()
-        XCTAssertTrue(s.enabled)
-        XCTAssertTrue(s.edgeLeft)
-        XCTAssertTrue(s.edgeRight)
-        XCTAssertTrue(s.edgeTop)
-        XCTAssertTrue(s.edgeBottom)
-        XCTAssertTrue(s.corners)
-        XCTAssertTrue(s.preview)
-        XCTAssertTrue(s.restoreOnUnsnap)
+        #expect(s.enabled)
+        #expect(s.edgeLeft)
+        #expect(s.edgeRight)
+        #expect(s.edgeTop)
+        #expect(s.edgeBottom)
+        #expect(s.corners)
+        #expect(s.preview)
+        #expect(s.restoreOnUnsnap)
     }
 
     // 필드가 일부만 있는 JSON(장래 필드 추가 대비)도 기본값으로 채워져야 한다.
-    func testDecodesPartialJSON() throws {
+    @Test func decodesPartialJSON() throws {
         let json = #"{"enabled":false,"corners":false}"#.data(using: .utf8)!
         let s = try JSONDecoder().decode(SnapSettings.self, from: json)
-        XCTAssertFalse(s.enabled)
-        XCTAssertFalse(s.corners)
-        XCTAssertTrue(s.preview)
-        XCTAssertTrue(s.edgeLeft)
+        #expect(!s.enabled)
+        #expect(!s.corners)
+        #expect(s.preview)
+        #expect(s.edgeLeft)
     }
 
-    func testRoundTrip() throws {
+    @Test func roundTrip() throws {
         var s = SnapSettings()
         s.edgeTop = false
         let data = try JSONEncoder().encode(s)
         let back = try JSONDecoder().decode(SnapSettings.self, from: data)
-        XCTAssertEqual(s, back)
+        #expect(s == back)
     }
 }
 ```
 
 - [ ] **Step 2: 테스트 실패 확인**
 
-Run: `swift test --filter SnapSettingsTests`
+Run: `make test`
 Expected: 컴파일 에러 — `cannot find 'SnapSettings' in scope`
 
 - [ ] **Step 3: 구현**
@@ -295,8 +269,8 @@ struct SnapSettings: Codable, Hashable {
 
 - [ ] **Step 4: 테스트 통과 확인**
 
-Run: `swift test --filter SnapSettingsTests`
-Expected: 3 tests passed
+Run: `make test`
+Expected: `Test run with 9 tests ... passed`, 실패 0
 
 - [ ] **Step 5: Commit**
 
@@ -324,89 +298,90 @@ git commit -m "feat: SnapSettings model with per-item toggles"
 `Tests/MyWindowManagerTests/SnapZoneResolverTests.swift` 생성:
 
 ```swift
-import XCTest
+import Testing
+import CoreGraphics
 @testable import MyWindowManager
 
-final class SnapZoneResolverTests: XCTestCase {
+struct SnapZoneResolverTests {
     // Cocoa 좌표 화면 (좌하단 원점, 위 = maxY)
     let screen = CGRect(x: 0, y: 0, width: 1920, height: 1080)
     let on = SnapSettings()
 
     // ── zone 판정 ──
 
-    func testEdges() {
-        XCTAssertEqual(SnapZoneResolver.zone(cursor: CGPoint(x: 4, y: 540), screenFrame: screen, settings: on), .leftHalf)
-        XCTAssertEqual(SnapZoneResolver.zone(cursor: CGPoint(x: 1916, y: 540), screenFrame: screen, settings: on), .rightHalf)
-        XCTAssertEqual(SnapZoneResolver.zone(cursor: CGPoint(x: 960, y: 1076), screenFrame: screen, settings: on), .maximize)
-        XCTAssertEqual(SnapZoneResolver.zone(cursor: CGPoint(x: 960, y: 4), screenFrame: screen, settings: on), .bottomHalf)
+    @Test func edges() {
+        #expect(SnapZoneResolver.zone(cursor: CGPoint(x: 4, y: 540), screenFrame: screen, settings: on) == .leftHalf)
+        #expect(SnapZoneResolver.zone(cursor: CGPoint(x: 1916, y: 540), screenFrame: screen, settings: on) == .rightHalf)
+        #expect(SnapZoneResolver.zone(cursor: CGPoint(x: 960, y: 1076), screenFrame: screen, settings: on) == .maximize)
+        #expect(SnapZoneResolver.zone(cursor: CGPoint(x: 960, y: 4), screenFrame: screen, settings: on) == .bottomHalf)
     }
 
-    func testCenterAndBeyondThresholdIsNil() {
-        XCTAssertNil(SnapZoneResolver.zone(cursor: CGPoint(x: 960, y: 540), screenFrame: screen, settings: on))
-        XCTAssertNil(SnapZoneResolver.zone(cursor: CGPoint(x: 10, y: 540), screenFrame: screen, settings: on)) // 8px 초과
+    @Test func centerAndBeyondThresholdIsNil() {
+        #expect(SnapZoneResolver.zone(cursor: CGPoint(x: 960, y: 540), screenFrame: screen, settings: on) == nil)
+        #expect(SnapZoneResolver.zone(cursor: CGPoint(x: 10, y: 540), screenFrame: screen, settings: on) == nil) // 8px 초과
     }
 
-    func testCornersTakePriority() {
+    @Test func cornersTakePriority() {
         // 왼쪽 가장자리의 위쪽 끝 128px 구간 → 좌상단 쿼터 (Cocoa 위 = maxY 근처)
-        XCTAssertEqual(SnapZoneResolver.zone(cursor: CGPoint(x: 4, y: 1000), screenFrame: screen, settings: on), .topLeftQuarter)
+        #expect(SnapZoneResolver.zone(cursor: CGPoint(x: 4, y: 1000), screenFrame: screen, settings: on) == .topLeftQuarter)
         // 위 가장자리의 왼쪽 끝 128px 구간 → 좌상단 쿼터
-        XCTAssertEqual(SnapZoneResolver.zone(cursor: CGPoint(x: 100, y: 1078), screenFrame: screen, settings: on), .topLeftQuarter)
-        XCTAssertEqual(SnapZoneResolver.zone(cursor: CGPoint(x: 4, y: 100), screenFrame: screen, settings: on), .bottomLeftQuarter)
-        XCTAssertEqual(SnapZoneResolver.zone(cursor: CGPoint(x: 1916, y: 1000), screenFrame: screen, settings: on), .topRightQuarter)
-        XCTAssertEqual(SnapZoneResolver.zone(cursor: CGPoint(x: 1900, y: 4), screenFrame: screen, settings: on), .bottomRightQuarter)
+        #expect(SnapZoneResolver.zone(cursor: CGPoint(x: 100, y: 1078), screenFrame: screen, settings: on) == .topLeftQuarter)
+        #expect(SnapZoneResolver.zone(cursor: CGPoint(x: 4, y: 100), screenFrame: screen, settings: on) == .bottomLeftQuarter)
+        #expect(SnapZoneResolver.zone(cursor: CGPoint(x: 1916, y: 1000), screenFrame: screen, settings: on) == .topRightQuarter)
+        #expect(SnapZoneResolver.zone(cursor: CGPoint(x: 1900, y: 4), screenFrame: screen, settings: on) == .bottomRightQuarter)
     }
 
-    func testCornersOffFallsBackToNearestEdge() {
+    @Test func cornersOffFallsBackToNearestEdge() {
         var s = SnapSettings()
         s.corners = false
         // (4, 1000): 왼쪽까지 4px, 위까지 80px → 더 가까운 왼쪽 엣지 규칙
-        XCTAssertEqual(SnapZoneResolver.zone(cursor: CGPoint(x: 4, y: 1000), screenFrame: screen, settings: s), .leftHalf)
+        #expect(SnapZoneResolver.zone(cursor: CGPoint(x: 4, y: 1000), screenFrame: screen, settings: s) == .leftHalf)
     }
 
-    func testDisabledEdgeReturnsNil() {
+    @Test func disabledEdgeReturnsNil() {
         var s = SnapSettings()
         s.edgeTop = false
-        XCTAssertNil(SnapZoneResolver.zone(cursor: CGPoint(x: 960, y: 1076), screenFrame: screen, settings: s))
+        #expect(SnapZoneResolver.zone(cursor: CGPoint(x: 960, y: 1076), screenFrame: screen, settings: s) == nil)
 
         var s2 = SnapSettings()
         s2.corners = false
         s2.edgeLeft = false
-        XCTAssertNil(SnapZoneResolver.zone(cursor: CGPoint(x: 4, y: 1000), screenFrame: screen, settings: s2))
+        #expect(SnapZoneResolver.zone(cursor: CGPoint(x: 4, y: 1000), screenFrame: screen, settings: s2) == nil)
     }
 
-    func testMasterOffReturnsNil() {
+    @Test func masterOffReturnsNil() {
         var s = SnapSettings()
         s.enabled = false
-        XCTAssertNil(SnapZoneResolver.zone(cursor: CGPoint(x: 4, y: 540), screenFrame: screen, settings: s))
+        #expect(SnapZoneResolver.zone(cursor: CGPoint(x: 4, y: 540), screenFrame: screen, settings: s) == nil)
     }
 
     // ── 목표 프레임 (AX 좌표: 위 = minY) ──
 
     let area = CGRect(x: 0, y: 25, width: 1000, height: 775)
 
-    func testFrames() {
-        XCTAssertEqual(SnapZoneResolver.frame(for: .maximize, in: area), area)
-        XCTAssertEqual(SnapZoneResolver.frame(for: .leftHalf, in: area),
-                       CGRect(x: 0, y: 25, width: 500, height: 775))
-        XCTAssertEqual(SnapZoneResolver.frame(for: .rightHalf, in: area),
-                       CGRect(x: 500, y: 25, width: 500, height: 775))
-        XCTAssertEqual(SnapZoneResolver.frame(for: .bottomHalf, in: area),
-                       CGRect(x: 0, y: 412.5, width: 1000, height: 387.5))
-        XCTAssertEqual(SnapZoneResolver.frame(for: .topLeftQuarter, in: area),
-                       CGRect(x: 0, y: 25, width: 500, height: 387.5))
-        XCTAssertEqual(SnapZoneResolver.frame(for: .topRightQuarter, in: area),
-                       CGRect(x: 500, y: 25, width: 500, height: 387.5))
-        XCTAssertEqual(SnapZoneResolver.frame(for: .bottomLeftQuarter, in: area),
-                       CGRect(x: 0, y: 412.5, width: 500, height: 387.5))
-        XCTAssertEqual(SnapZoneResolver.frame(for: .bottomRightQuarter, in: area),
-                       CGRect(x: 500, y: 412.5, width: 500, height: 387.5))
+    @Test func frames() {
+        #expect(SnapZoneResolver.frame(for: .maximize, in: area) == area)
+        #expect(SnapZoneResolver.frame(for: .leftHalf, in: area)
+                == CGRect(x: 0, y: 25, width: 500, height: 775))
+        #expect(SnapZoneResolver.frame(for: .rightHalf, in: area)
+                == CGRect(x: 500, y: 25, width: 500, height: 775))
+        #expect(SnapZoneResolver.frame(for: .bottomHalf, in: area)
+                == CGRect(x: 0, y: 412.5, width: 1000, height: 387.5))
+        #expect(SnapZoneResolver.frame(for: .topLeftQuarter, in: area)
+                == CGRect(x: 0, y: 25, width: 500, height: 387.5))
+        #expect(SnapZoneResolver.frame(for: .topRightQuarter, in: area)
+                == CGRect(x: 500, y: 25, width: 500, height: 387.5))
+        #expect(SnapZoneResolver.frame(for: .bottomLeftQuarter, in: area)
+                == CGRect(x: 0, y: 412.5, width: 500, height: 387.5))
+        #expect(SnapZoneResolver.frame(for: .bottomRightQuarter, in: area)
+                == CGRect(x: 500, y: 412.5, width: 500, height: 387.5))
     }
 }
 ```
 
 - [ ] **Step 2: 테스트 실패 확인**
 
-Run: `swift test --filter SnapZoneResolverTests`
+Run: `make test`
 Expected: 컴파일 에러 — `cannot find 'SnapZoneResolver' in scope`
 
 - [ ] **Step 3: 구현**
@@ -502,8 +477,8 @@ enum SnapZoneResolver {
 
 - [ ] **Step 4: 테스트 통과 확인**
 
-Run: `swift test --filter SnapZoneResolverTests`
-Expected: 8 tests passed
+Run: `make test`
+Expected: `Test run with 16 tests ... passed`, 실패 0
 
 - [ ] **Step 5: Commit**
 
@@ -525,38 +500,39 @@ git commit -m "feat: snap zone resolution (edges, corners, toggles)"
 `Tests/MyWindowManagerTests/AppConfigCompatTests.swift` 생성:
 
 ```swift
-import XCTest
+import Testing
+import Foundation
 @testable import MyWindowManager
 
-final class AppConfigCompatTests: XCTestCase {
+struct AppConfigCompatTests {
     // 기존 사용자의 v2 config.json(새 필드 없음)이 기본값으로 디코드돼야 한다.
-    func testDecodingV2ConfigAppliesDefaults() throws {
+    @Test func decodingV2ConfigAppliesDefaults() throws {
         let json = #"{"version":2,"presets":[],"layouts":[],"cycles":[]}"#.data(using: .utf8)!
         let cfg = try JSONDecoder().decode(AppConfig.self, from: json)
-        XCTAssertTrue(cfg.snapSettings.enabled)
-        XCTAssertTrue(cfg.snapSettings.restoreOnUnsnap)
-        XCTAssertEqual(cfg.sizeBindings, [])
-        XCTAssertEqual(cfg.sizeStepRatio, 0.1)
+        #expect(cfg.snapSettings.enabled)
+        #expect(cfg.snapSettings.restoreOnUnsnap)
+        #expect(cfg.sizeBindings == [])
+        #expect(cfg.sizeStepRatio == 0.1)
     }
 
-    func testRoundTripKeepsNewFields() throws {
+    @Test func roundTripKeepsNewFields() throws {
         var cfg = AppConfig(presets: [], layouts: [], cycles: [], deadzones: [])
         cfg.snapSettings.edgeTop = false
         cfg.sizeStepRatio = 0.15
         cfg.sizeBindings = [SizeBinding(action: .grow, hotkey: nil)]
         let data = try JSONEncoder().encode(cfg)
         let back = try JSONDecoder().decode(AppConfig.self, from: data)
-        XCTAssertFalse(back.snapSettings.edgeTop)
-        XCTAssertEqual(back.sizeStepRatio, 0.15)
-        XCTAssertEqual(back.sizeBindings.count, 1)
-        XCTAssertEqual(back.sizeBindings[0].action, .grow)
+        #expect(!back.snapSettings.edgeTop)
+        #expect(back.sizeStepRatio == 0.15)
+        #expect(back.sizeBindings.count == 1)
+        #expect(back.sizeBindings[0].action == .grow)
     }
 }
 ```
 
 - [ ] **Step 2: 테스트 실패 확인**
 
-Run: `swift test --filter AppConfigCompatTests`
+Run: `make test`
 Expected: 컴파일 에러 — `value of type 'AppConfig' has no member 'snapSettings'`
 
 - [ ] **Step 3: AppConfig 수정**
@@ -702,8 +678,8 @@ struct AppConfig: Codable {
 
 - [ ] **Step 7: 전체 테스트 + 빌드 확인**
 
-Run: `swift test && swift build`
-Expected: 모든 테스트 통과, 빌드 성공
+Run: `make test && swift build`
+Expected: `Test run with 18 tests ... passed`, 빌드 성공
 
 - [ ] **Step 8: Commit**
 
@@ -753,7 +729,7 @@ git commit -m "feat: persist snap settings + size bindings (config v3, backward 
 
 - [ ] **Step 3: 빌드 + 테스트**
 
-Run: `swift build && swift test`
+Run: `swift build && make test`
 Expected: 성공 (기존 테스트 영향 없음)
 
 - [ ] **Step 4: Commit**
@@ -925,41 +901,42 @@ git commit -m "feat: grow/shrink hotkey settings UI in move tab"
 `Tests/MyWindowManagerTests/SnapRestoreStoreTests.swift` 생성:
 
 ```swift
-import XCTest
+import Testing
+import CoreGraphics
 @testable import MyWindowManager
 
 @MainActor
-final class SnapRestoreStoreTests: XCTestCase {
-    func testRememberAndForget() {
+struct SnapRestoreStoreTests {
+    @Test func rememberAndForget() {
         let store = SnapRestoreStore()
         let id: CGWindowID = 42
-        XCTAssertNil(store.entry(for: id))
+        #expect(store.entry(for: id) == nil)
 
         store.remember(windowID: id,
                        preSnapSize: CGSize(width: 800, height: 600),
                        snappedFrame: CGRect(x: 0, y: 25, width: 960, height: 1055))
         let entry = store.entry(for: id)
-        XCTAssertEqual(entry?.preSnapSize, CGSize(width: 800, height: 600))
-        XCTAssertEqual(entry?.snappedFrame, CGRect(x: 0, y: 25, width: 960, height: 1055))
+        #expect(entry?.preSnapSize == CGSize(width: 800, height: 600))
+        #expect(entry?.snappedFrame == CGRect(x: 0, y: 25, width: 960, height: 1055))
 
         store.forget(id)
-        XCTAssertNil(store.entry(for: id))
+        #expect(store.entry(for: id) == nil)
     }
 
-    func testReSnapOverwrites() {
+    @Test func reSnapOverwrites() {
         let store = SnapRestoreStore()
         store.remember(windowID: 1, preSnapSize: CGSize(width: 100, height: 100),
                        snappedFrame: .zero)
         store.remember(windowID: 1, preSnapSize: CGSize(width: 200, height: 200),
                        snappedFrame: .zero)
-        XCTAssertEqual(store.entry(for: 1)?.preSnapSize, CGSize(width: 200, height: 200))
+        #expect(store.entry(for: 1)?.preSnapSize == CGSize(width: 200, height: 200))
     }
 }
 ```
 
 - [ ] **Step 2: 테스트 실패 확인**
 
-Run: `swift test --filter SnapRestoreStoreTests`
+Run: `make test`
 Expected: 컴파일 에러 — `cannot find 'SnapRestoreStore' in scope`
 
 - [ ] **Step 3: 구현**
@@ -997,8 +974,8 @@ final class SnapRestoreStore {
 
 - [ ] **Step 4: 테스트 통과 확인**
 
-Run: `swift test --filter SnapRestoreStoreTests`
-Expected: 2 tests passed
+Run: `make test`
+Expected: `Test run with 20 tests ... passed`, 실패 0
 
 - [ ] **Step 5: Commit**
 
@@ -1357,7 +1334,7 @@ final class DragSnapMonitor {
 
 - [ ] **Step 2: 빌드 + 테스트**
 
-Run: `swift build && swift test`
+Run: `swift build && make test`
 Expected: 성공
 
 - [ ] **Step 3: Commit**
@@ -1506,7 +1483,7 @@ struct SnapView: View {
 
 - [ ] **Step 3: 빌드 + 테스트**
 
-Run: `swift build && swift test`
+Run: `swift build && make test`
 Expected: 성공
 
 - [ ] **Step 4: Commit**
@@ -1558,7 +1535,7 @@ git commit -m "feat: snap settings tab with per-item toggles"
 
 - [ ] **Step 2: 전체 테스트 + 빌드**
 
-Run: `swift test && swift build`
+Run: `make test && swift build`
 Expected: 전체 통과
 
 - [ ] **Step 3: 앱 재빌드 + 재실행** (프로젝트 규칙 — 코드 변경 후 자동 재실행)
