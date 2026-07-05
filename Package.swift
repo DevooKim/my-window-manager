@@ -1,4 +1,4 @@
-// swift-tools-version:5.9
+// swift-tools-version:6.0
 import PackageDescription
 
 let package = Package(
@@ -15,6 +15,12 @@ let package = Package(
             name: "MyWindowManager",
             dependencies: ["HotKey"],
             path: "Sources/MyWindowManager"
+        ),
+        .testTarget(
+            name: "MyWindowManagerTests",
+            dependencies: ["MyWindowManager"],
+            path: "Tests/MyWindowManagerTests"
         )
-    ]
+    ],
+    swiftLanguageModes: [.v5]
 )
