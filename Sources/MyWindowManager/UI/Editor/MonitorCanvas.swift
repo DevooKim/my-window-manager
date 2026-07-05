@@ -239,9 +239,11 @@ struct MonitorCanvas: View {
                 var newX = clamp(startX + dxMon, b.minX, max(b.minX, b.maxX - w))
                 var newY = clamp(startY + dyMon, b.minY, max(b.minY, b.maxY - h))
                 if snap {
-                    newX = clamp(snapValue(newX, total: monitorPixelSize.width),
+                    newX = clamp(snapMovePosition(newX, size: w, center: b.midX,
+                                                  total: monitorPixelSize.width),
                                  b.minX, max(b.minX, b.maxX - w))
-                    newY = clamp(snapValue(newY, total: monitorPixelSize.height),
+                    newY = clamp(snapMovePosition(newY, size: h, center: b.midY,
+                                                  total: monitorPixelSize.height),
                                  b.minY, max(b.minY, b.maxY - h))
                 }
                 area.x = unitPosX(start.x, monitorPx: newX)
@@ -326,6 +328,16 @@ struct MonitorCanvas: View {
         case .pixels:
             return .pixels(pixels)
         }
+    }
+
+    /// 이동 스냅: 상자 중앙이 usable 영역 중앙에 가까우면 중앙 정렬을 우선하고,
+    /// 아니면 기존 엣지 분수 스냅을 적용한다.
+    private func snapMovePosition(_ v: CGFloat, size: CGFloat,
+                                  center: CGFloat, total: CGFloat) -> CGFloat {
+        let tolerance = 0.03 * max(1, total)
+        let centered = center - size / 2
+        if abs(v - centered) < tolerance { return centered }
+        return snapValue(v, total: total)
     }
 
     private func snapValue(_ v: CGFloat, total: CGFloat) -> CGFloat {
