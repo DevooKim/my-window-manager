@@ -20,13 +20,25 @@ enum RaycastCommand: Equatable {
         guard url.host == "v1" else {
             throw ParseError.invalidVersion
         }
-
-        let parts = url.path.split(separator: "/").map(String.init)
-        guard parts.count == 2 else {
+        guard url.query == nil,
+              url.fragment == nil,
+              url.user == nil,
+              url.password == nil,
+              url.port == nil,
+              !url.absoluteString.lowercased()
+                  .hasPrefix("my-window-manager://v1//"),
+              !url.absoluteString.hasSuffix("/") else {
             throw ParseError.invalidRoute
         }
 
-        switch (parts[0], parts[1]) {
+        let parts = url.path
+            .split(separator: "/", omittingEmptySubsequences: false)
+            .map(String.init)
+        guard parts.count == 3, parts[0].isEmpty else {
+            throw ParseError.invalidRoute
+        }
+
+        switch (parts[1], parts[2]) {
         case ("preset", let value):
             guard let id = UUID(uuidString: value) else { throw ParseError.invalidRoute }
             self = .preset(id)

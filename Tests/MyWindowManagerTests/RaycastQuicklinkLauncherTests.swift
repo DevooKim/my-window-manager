@@ -2,6 +2,7 @@ import Testing
 import Foundation
 @testable import MyWindowManager
 
+@MainActor
 struct RaycastQuicklinkLauncherTests {
     @Test func encodesQuicklinkArguments() throws {
         let id = UUID(uuidString: "550E8400-E29B-41D4-A716-446655440000")!
@@ -43,5 +44,27 @@ struct RaycastQuicklinkLauncherTests {
         )
         #expect(object["kind"] == "move")
         #expect(object["identifier"] == "display-next")
+    }
+
+    @Test func copiesDirectLinkBeforeOpeningHelper() {
+        var copiedValue: String?
+        var openedURL: URL?
+        var copiedBeforeOpen = false
+
+        let opened = RaycastQuicklinkLauncher.open(
+            name: "창 확대",
+            command: .size(.grow),
+            openURL: { url in
+                copiedBeforeOpen = copiedValue == "my-window-manager://v1/size/grow"
+                openedURL = url
+                return true
+            },
+            copyString: { copiedValue = $0 }
+        )
+
+        #expect(opened)
+        #expect(copiedBeforeOpen)
+        #expect(openedURL?.scheme == "raycast")
+        #expect(copiedValue == "my-window-manager://v1/size/grow")
     }
 }

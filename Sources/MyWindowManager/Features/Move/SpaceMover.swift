@@ -24,6 +24,12 @@ enum SpaceMover {
     /// `direction` +1=다음, -1=이전. 성공 시 true.
     @discardableResult
     static func move(direction: Int) -> Bool {
+        guard let window = WindowController.focusedWindow() else { return false }
+        return move(window: window, direction: direction)
+    }
+
+    @discardableResult
+    static func move(window: AXUIElement, direction: Int) -> Bool {
         guard CGSPrivate.bridgedAvailable,
               let cid = CGSPrivate.mainConnectionID?() else {
             warnUnavailableOnce()
@@ -31,9 +37,8 @@ enum SpaceMover {
         }
 
         // 1. focused window → CGWindowID
-        guard let win = WindowController.focusedWindow() else { return false }
         var wid: CGWindowID = 0
-        guard _AXUIElementGetWindow(win, &wid) == .success, wid != 0 else { return false }
+        guard _AXUIElementGetWindow(window, &wid) == .success, wid != 0 else { return false }
 
         // 2~3. window가 속한 space + 그 space가 있는 display layout
         guard let currentSpace = spaceID(forWindow: wid, cid: cid),
@@ -62,7 +67,7 @@ enum SpaceMover {
         // 6. 화면 전환 (창 따라가기) — 옮긴 창을 raise/activate 하면 macOS가
         //    Dock 주도의 정상 경로로 해당 space로 전환해준다.
         //    (bridged SetCurrentSpace 는 Dock과 동기화되지 않아 화면이 깨진다.)
-        followWindow(win)
+        followWindow(window)
         return true
     }
 

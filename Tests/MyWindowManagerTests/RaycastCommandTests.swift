@@ -33,10 +33,18 @@ struct RaycastCommandTests {
             "my-window-manager://v1/preset/not-a-uuid",
             "my-window-manager://v1/move/unknown",
             "my-window-manager://v1/size/grow/extra",
+            "my-window-manager://v1//size/grow",
+            "my-window-manager://v1/size/grow/",
+            "my-window-manager://v1/size/grow?unexpected=true",
         ]
         for value in invalid {
-            #expect(throws: RaycastCommand.ParseError.self) {
-                try RaycastCommand(url: URL(string: value)!)
+            do {
+                let command = try RaycastCommand(url: URL(string: value)!)
+                Issue.record("Expected \(value) to fail, got \(command)")
+            } catch is RaycastCommand.ParseError {
+                // Expected.
+            } catch {
+                Issue.record("Expected ParseError for \(value), got \(error)")
             }
         }
     }

@@ -6,11 +6,16 @@ enum DisplayMover {
     /// 순환(마지막→처음). 디스플레이가 1개면 no-op.
     @discardableResult
     static func move(direction: Int) -> Bool {
+        guard let window = WindowController.focusedWindow() else { return false }
+        return move(window: window, direction: direction)
+    }
+
+    @discardableResult
+    static func move(window: AXUIElement, direction: Int) -> Bool {
         let screens = NSScreen.screens
         guard screens.count > 1,
-              let win = WindowController.focusedWindow(),
-              let current = ScreenHelper.screen(containing: win),
-              let frame = WindowController.getFrame(win),
+              let current = ScreenHelper.screen(containing: window),
+              let frame = WindowController.getFrame(window),
               let currentIndex = screens.firstIndex(of: current) else { return false }
 
         let count = screens.count
@@ -43,9 +48,9 @@ enum DisplayMover {
         // 창이 다른 화면으로 넘어가는 순간 첫 setFrame은 크기가 옛 화면 기준으로
         // 잘릴 수 있다(예: 1920 요청 → 1705). 한 번 더 설정해 대상 화면 기준으로
         // 반영시킨다.
-        WindowController.setFrame(win, frame: newFrame)
+        WindowController.setFrame(window, frame: newFrame)
         usleep(30_000)
-        WindowController.setFrame(win, frame: newFrame)
+        WindowController.setFrame(window, frame: newFrame)
         return true
     }
 

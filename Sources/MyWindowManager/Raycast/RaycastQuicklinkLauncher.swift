@@ -31,21 +31,26 @@ struct RaycastQuicklinkRequest {
 
 @MainActor
 enum RaycastQuicklinkLauncher {
-    static func open(name: String, command: RaycastCommand) {
-        let request = RaycastQuicklinkRequest(name: name, command: command)
-        guard NSWorkspace.shared.open(request.helperURL) else {
+    @discardableResult
+    static func open(
+        name: String,
+        command: RaycastCommand,
+        openURL: (URL) -> Bool = { NSWorkspace.shared.open($0) },
+        copyString: (String) -> Void = { value in
             NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(
-                command.url.absoluteString,
-                forType: .string
-            )
-
+            NSPasteboard.general.setString(value, forType: .string)
+        }
+    ) -> Bool {
+        copyString(command.url.absoluteString)
+        let request = RaycastQuicklinkRequest(name: name, command: command)
+        guard openURL(request.helperURL) else {
             let alert = NSAlert()
             alert.messageText = "Raycast를 열 수 없습니다"
-            alert.informativeText = "Quicklink 주소를 클립보드에 복사했습니다. Raycast와 My Window Manager helper 익스텐션을 설치한 뒤 직접 Quicklink를 만들어주세요."
+            alert.informativeText = "앱 링크를 클립보드에 복사했습니다. Raycast와 My Window Manager helper 익스텐션을 설치한 뒤 직접 Quicklink를 만들어주세요."
             alert.alertStyle = .warning
             alert.runModal()
-            return
+            return false
         }
+        return true
     }
 }

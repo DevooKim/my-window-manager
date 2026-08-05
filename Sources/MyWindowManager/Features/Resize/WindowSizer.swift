@@ -21,13 +21,22 @@ enum WindowSizer {
     /// 포커스 창에 적용. 창이 없으면 no-op(false).
     @discardableResult
     static func step(_ action: SizeAction, ratio: Double) -> Bool {
-        guard let win = WindowController.focusedWindow(),
-              let screen = ScreenHelper.screen(containing: win),
-              let frame = WindowController.getFrame(win) else { return false }
+        guard let window = WindowController.focusedWindow() else { return false }
+        return step(action, window: window, ratio: ratio)
+    }
+
+    @discardableResult
+    static func step(
+        _ action: SizeAction,
+        window: AXUIElement,
+        ratio: Double
+    ) -> Bool {
+        guard let screen = ScreenHelper.screen(containing: window),
+              let frame = WindowController.getFrame(window) else { return false }
         let area = ScreenHelper.placementArea(of: screen)
         let target = steppedFrame(current: frame, area: area,
                                   ratio: ratio, grow: action == .grow)
-        WindowController.setFrame(win, frame: target)
+        WindowController.setFrame(window, frame: target)
         return true
     }
 }

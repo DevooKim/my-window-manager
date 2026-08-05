@@ -73,6 +73,20 @@ final class RaycastCommandDispatcher {
         }
     }
 
+    static func eligibleWindow(
+        from target: WindowController.FocusedTarget?,
+        appBundleIdentifier: String?
+    ) -> AXUIElement? {
+        guard let target, let bundleIdentifier = target.bundleIdentifier else {
+            return nil
+        }
+        guard bundleIdentifier != "com.raycast.macos",
+              bundleIdentifier != appBundleIdentifier else {
+            return nil
+        }
+        return target.window
+    }
+
     func dispatch(_ command: RaycastCommand) {
         Task { await execute(command) }
     }
@@ -96,26 +110,26 @@ final class RaycastCommandDispatcher {
                 return
             }
 
-            guard await waitForEligibleFrontmostApplication() else {
+            guard let focusedWindow = await waitForEligibleFocusedWindow() else {
                 throw DispatchError.noFocusedWindow
             }
 
             let succeeded: Bool
             switch resolved {
             case .preset(let preset):
-                succeeded = ResizeApplier.apply(preset)
+                succeeded = ResizeApplier.apply(preset, to: focusedWindow)
             case .cycle(let cycle):
-                let hasPreset = cycle.presetIds.contains { store.preset(by: $0) != nil }
-                if hasPreset {
-                    registry.advanceCycle(id: cycle.id)
-                }
-                succeeded = hasPreset
+                succeeded = registry.advanceCycle(id: cycle.id, window: focusedWindow)
             case .move(let action):
                 succeeded = action.isSpace
-                    ? SpaceMover.move(direction: action.direction)
-                    : DisplayMover.move(direction: action.direction)
+                    ? SpaceMover.move(window: focusedWindow, direction: action.direction)
+                    : DisplayMover.move(window: focusedWindow, direction: action.direction)
             case .size(let action):
-                succeeded = WindowSizer.step(action, ratio: store.sizeStepRatio)
+                succeeded = WindowSizer.step(
+                    action,
+                    window: focusedWindow,
+                    ratio: store.sizeStepRatio
+                )
             case .layout:
                 succeeded = true
             }
@@ -130,19 +144,16 @@ final class RaycastCommandDispatcher {
         }
     }
 
-    private func waitForEligibleFrontmostApplication() async -> Bool {
-        let excludedBundleIDs = [
-            "com.raycast.macos",
-            Bundle.main.bundleIdentifier,
-        ].compactMap { $0 }
-
+    private func waitForEligibleFocusedWindow() async -> AXUIElement? {
         for _ in 0..<20 {
-            if let bundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier,
-               !excludedBundleIDs.contains(bundleID) {
-                return true
+            if let window = Self.eligibleWindow(
+                from: WindowController.focusedTarget(),
+                appBundleIdentifier: Bundle.main.bundleIdentifier
+            ) {
+                return window
             }
             try? await Task.sleep(nanoseconds: 50_000_000)
         }
-        return false
+        return nil
     }
 }

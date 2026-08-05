@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import ApplicationServices
 @testable import MyWindowManager
 
 @MainActor
@@ -35,5 +36,31 @@ struct RaycastCommandDispatcherTests {
                 .preset(UUID()), presets: [], cycles: [], layouts: []
             )
         }
+    }
+
+    @Test func eligibleTargetKeepsBundleAndWindowTogether() {
+        let window = AXUIElementCreateSystemWide()
+        let allowed = WindowController.FocusedTarget(
+            bundleIdentifier: "com.apple.TextEdit",
+            window: window
+        )
+        let resolved = RaycastCommandDispatcher.eligibleWindow(
+            from: allowed,
+            appBundleIdentifier: "io.goorm.MyWindowManager"
+        )
+        #expect(resolved.map { CFEqual($0, window) } == true)
+
+        let raycast = WindowController.FocusedTarget(
+            bundleIdentifier: "com.raycast.macos",
+            window: window
+        )
+        #expect(RaycastCommandDispatcher.eligibleWindow(
+            from: raycast,
+            appBundleIdentifier: "io.goorm.MyWindowManager"
+        ) == nil)
+        #expect(RaycastCommandDispatcher.eligibleWindow(
+            from: nil,
+            appBundleIdentifier: "io.goorm.MyWindowManager"
+        ) == nil)
     }
 }

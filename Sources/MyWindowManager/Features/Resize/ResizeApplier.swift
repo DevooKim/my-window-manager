@@ -4,13 +4,20 @@ import ApplicationServices
 enum ResizeApplier {
     @discardableResult
     static func apply(_ preset: ResizePreset) -> Bool {
-        guard let win = WindowController.focusedWindow(),
-              let screen = ScreenHelper.screen(containing: win) else {
+        guard let window = WindowController.focusedWindow() else {
+            return false
+        }
+        return apply(preset, to: window)
+    }
+
+    @discardableResult
+    static func apply(_ preset: ResizePreset, to window: AXUIElement) -> Bool {
+        guard let screen = ScreenHelper.screen(containing: window) else {
             return false
         }
         let area = ScreenHelper.placementArea(of: screen)
         let frame = preset.frame.resolve(in: area)
-        WindowController.setFrame(win, frame: frame)
+        WindowController.setFrame(window, frame: frame)
         return true
     }
 

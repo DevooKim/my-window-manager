@@ -26,6 +26,8 @@ monitors — all driven by global hotkeys.
 Install the companion Raycast extension, then use `Raycast에 추가` beside a
 preset, cycle, layout, move action, or size action. Save the prefilled
 Quicklink in Raycast to make the item searchable from Root Search.
+The button also copies the direct app link to the clipboard as a fallback when
+the companion extension is unavailable.
 
 Quicklinks use stable item IDs, so renaming an item does not break execution.
 Raycast does not expose Quicklink rename APIs, so rename the Quicklink in

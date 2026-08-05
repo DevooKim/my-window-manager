@@ -98,6 +98,11 @@ final class ConfigStore: ObservableObject {
         load()
     }
 
+    init(configURL: URL) {
+        self.url = configURL
+        load()
+    }
+
     func load() {
         if let data = try? Data(contentsOf: url),
            let cfg = try? JSONDecoder().decode(AppConfig.self, from: data) {

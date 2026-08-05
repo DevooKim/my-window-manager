@@ -1,6 +1,7 @@
 import Foundation
 import HotKey
 import AppKit
+import ApplicationServices
 
 @MainActor
 final class HotkeyRegistry {
@@ -14,6 +15,8 @@ final class HotkeyRegistry {
 
     private var hotkeys: [(Target, HotKey)] = []
     private weak var store: ConfigStore?
+    private let applyPreset: (ResizePreset, AXUIElement?) -> Bool
+    private let showCycleHUD: @MainActor (String, [HUDItem], Int, CycleHUDStyle) -> Void
 
     // Cycle progression state. Pressing the same cycle's hotkey consecutively
     // advances the index; pressing any other hotkey resets it (window-agnostic,
@@ -24,6 +27,27 @@ final class HotkeyRegistry {
     /// While paused, no global hotkeys are registered — used during hotkey
     /// capture so pressing an existing combo doesn't fire its preset/cycle.
     private var paused = false
+
+    init(
+        applyPreset: @escaping (ResizePreset, AXUIElement?) -> Bool = { preset, window in
+            if let window {
+                return ResizeApplier.apply(preset, to: window)
+            }
+            return ResizeApplier.apply(preset)
+        },
+        showCycleHUD: @escaping @MainActor (String, [HUDItem], Int, CycleHUDStyle) -> Void = {
+            cycleName, items, index, style in
+            CycleHUDController.shared.show(
+                cycleName: cycleName,
+                items: items,
+                currentIndex: index,
+                style: style
+            )
+        }
+    ) {
+        self.applyPreset = applyPreset
+        self.showCycleHUD = showCycleHUD
+    }
 
     func bind(store: ConfigStore) {
         self.store = store
@@ -111,11 +135,14 @@ final class HotkeyRegistry {
     /// Applies the next preset in a cycle. Same cycle pressed consecutively →
     /// advance and wrap; any other hotkey in between → start from index 0.
     /// Also called from the menu bar so menu clicks cycle the same way.
-    func advanceCycle(id: UUID) {
+    @discardableResult
+    func advanceCycle(id: UUID, window: AXUIElement? = nil) -> Bool {
         guard let store,
-              let cycle = store.cycles.first(where: { $0.id == id }) else { return }
+              let cycle = store.cycles.first(where: { $0.id == id }) else {
+            return false
+        }
         let presets = cycle.presetIds.compactMap { store.preset(by: $0) }
-        guard !presets.isEmpty else { return }
+        guard !presets.isEmpty else { return false }
 
         let index: Int
         if lastCycleId == id {
@@ -123,17 +150,18 @@ final class HotkeyRegistry {
         } else {
             index = 0
         }
-        _ = ResizeApplier.apply(presets[index])
+        guard applyPreset(presets[index], window) else { return false }
         lastCycleId = id
         lastCycleIndex = index
 
         // 적용 위치를 화면 중앙 HUD로 잠깐 표시.
-        CycleHUDController.shared.show(
-            cycleName: cycle.name,
-            items: presets.map { HUDItem(name: $0.name, frame: $0.frame) },
-            currentIndex: index,
-            style: store.cycleHUDStyle
+        showCycleHUD(
+            cycle.name,
+            presets.map { HUDItem(name: $0.name, frame: $0.frame) },
+            index,
+            store.cycleHUDStyle
         )
+        return true
     }
 
     private func resetCycleState() {

@@ -2,14 +2,30 @@ import ApplicationServices
 import AppKit
 
 enum WindowController {
-    static func focusedWindow() -> AXUIElement? {
-        guard let app = NSWorkspace.shared.frontmostApplication else { return nil }
+    struct FocusedTarget {
+        let bundleIdentifier: String?
+        let window: AXUIElement
+    }
+
+    static func focusedTarget() -> FocusedTarget? {
+        guard let app = NSWorkspace.shared.frontmostApplication else {
+            return nil
+        }
         let axApp = AXUIElementCreateApplication(app.processIdentifier)
         var win: CFTypeRef?
         guard AXUIElementCopyAttributeValue(
             axApp, kAXFocusedWindowAttribute as CFString, &win
-        ) == .success, let win else { return nil }
-        return (win as! AXUIElement)
+        ) == .success, let win else {
+            return nil
+        }
+        return FocusedTarget(
+            bundleIdentifier: app.bundleIdentifier,
+            window: win as! AXUIElement
+        )
+    }
+
+    static func focusedWindow() -> AXUIElement? {
+        focusedTarget()?.window
     }
 
     static func firstWindow(of bundleId: String) -> AXUIElement? {

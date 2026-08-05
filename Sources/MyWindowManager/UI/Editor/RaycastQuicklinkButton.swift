@@ -17,7 +17,7 @@ struct RaycastQuicklinkButton: View {
                 Label("Raycast에 추가", systemImage: "sparkles")
             }
         }
-        .help("Raycast Quicklink 생성 화면 열기")
+        .help("앱 링크를 복사하고 Raycast Quicklink 생성 화면 열기")
     }
 }
 
