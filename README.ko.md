@@ -21,6 +21,16 @@
 - **전역 단축키** — 각 프리셋·사이클·레이아웃에 원하는 (조합키 + 키) 단축키를 지정합니다.
 - **설정 백업** — 전체 프리셋·사이클·레이아웃을 JSON으로 내보내고 가져옵니다.
 
+## Raycast Quicklink
+
+함께 제공되는 Raycast 익스텐션을 설치한 다음 프리셋, 사이클, 레이아웃,
+이동 또는 크기 동작 옆의 `Raycast에 추가`를 누릅니다. Raycast에 미리 채워진
+Quicklink를 저장하면 해당 항목을 최상위 검색에서 이름으로 실행할 수 있습니다.
+
+Quicklink는 항목의 고정 ID를 사용하므로 앱에서 이름을 변경해도 실행은 유지됩니다.
+Raycast는 Quicklink 이름 변경 API를 제공하지 않으므로, 항목 이름을 바꾼 경우
+Raycast에서도 Quicklink 이름을 직접 변경해야 합니다.
+
 ## 설치
 
 1. [Releases](../../releases)에서 최신 `My-Window-Manager-vX.Y.Z.zip`을 받아 압축을 풉니다.

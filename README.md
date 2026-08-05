@@ -21,6 +21,16 @@ monitors — all driven by global hotkeys.
 - **Global hotkeys** — assign any modifier+key combo to each preset / cycle / layout.
 - **Config backup** — export/import all presets, cycles, and layouts as JSON.
 
+## Raycast Quicklinks
+
+Install the companion Raycast extension, then use `Raycast에 추가` beside a
+preset, cycle, layout, move action, or size action. Save the prefilled
+Quicklink in Raycast to make the item searchable from Root Search.
+
+Quicklinks use stable item IDs, so renaming an item does not break execution.
+Raycast does not expose Quicklink rename APIs, so rename the Quicklink in
+Raycast separately when you rename an item in My Window Manager.
+
 ## Install
 
 1. Download the latest `My-Window-Manager-vX.Y.Z.zip` from [Releases](../../releases) and unzip it.
