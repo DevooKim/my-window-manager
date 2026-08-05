@@ -14,10 +14,15 @@ struct HotkeyConfig: Codable, Hashable {
     var displayString: String {
         var s = ""
         let m = NSEvent.ModifierFlags(carbonFlags: modifiers)
-        if m.contains(.control) { s += "\u{2303}" }
-        if m.contains(.option) { s += "\u{2325}" }
-        if m.contains(.shift) { s += "\u{21E7}" }
-        if m.contains(.command) { s += "\u{2318}" }
+        let hyperkeyModifiers = UInt32(controlKey | optionKey | shiftKey | cmdKey)
+        if modifiers == hyperkeyModifiers {
+            s = "✦"
+        } else {
+            if m.contains(.control) { s += "\u{2303}" }
+            if m.contains(.option) { s += "\u{2325}" }
+            if m.contains(.shift) { s += "\u{21E7}" }
+            if m.contains(.command) { s += "\u{2318}" }
+        }
         if let key = Key(carbonKeyCode: keyCode) {
             s += key.description
         } else {
