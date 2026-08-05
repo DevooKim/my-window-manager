@@ -112,10 +112,18 @@ struct CycleEditorView: View {
                 TextField("Name", text: nameBinding)
                     .textFieldStyle(.roundedBorder)
                     .frame(maxWidth: 280)
+                if let draft {
+                    RaycastQuicklinkButton(
+                        name: draft.name,
+                        command: .cycle(draft.id),
+                        beforeOpen: saveDraft
+                    )
+                }
                 Spacer()
                 Text("Hotkey:")
                 HotkeyCaptureView(hotkey: hotkeyBinding)
             }
+            RaycastQuicklinkRenameHint()
             HotkeyConflictWarning(hotkey: draft?.hotkey, selfId: draft?.id)
 
             Text("같은 키를 반복해서 누르면 아래 순서대로 순환합니다.")

@@ -52,6 +52,11 @@ struct MoveView: View {
             HStack {
                 Text(action.label)
                 Spacer()
+                RaycastQuicklinkButton(
+                    name: action.label,
+                    command: .move(action),
+                    compact: true
+                )
                 HotkeyCaptureView(hotkey: binding)
             }
             HotkeyConflictWarning(hotkey: binding.wrappedValue, selfId: nil)
@@ -65,6 +70,11 @@ struct MoveView: View {
             HStack {
                 Text(action.label)
                 Spacer()
+                RaycastQuicklinkButton(
+                    name: action.label,
+                    command: .size(action),
+                    compact: true
+                )
                 HotkeyCaptureView(hotkey: binding)
             }
             HotkeyConflictWarning(hotkey: binding.wrappedValue, selfId: nil)

@@ -77,12 +77,20 @@ struct LayoutEditorView: View {
                 ))
                 .textFieldStyle(.roundedBorder)
                 .frame(maxWidth: 280)
+                if let draft {
+                    RaycastQuicklinkButton(
+                        name: draft.name,
+                        command: .layout(draft.id),
+                        beforeOpen: saveDraft
+                    )
+                }
                 Spacer()
                 HotkeyCaptureView(hotkey: Binding(
                     get: { draft?.hotkey },
                     set: { draft?.hotkey = $0 }
                 ))
             }
+            RaycastQuicklinkRenameHint()
             HotkeyConflictWarning(hotkey: draft?.hotkey, selfId: draft?.id)
 
             // Multi-monitor canvas grid

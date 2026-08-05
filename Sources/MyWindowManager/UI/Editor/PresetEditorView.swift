@@ -88,6 +88,7 @@ struct PresetEditorView: View {
     private var detailContent: some View {
         VStack(alignment: .leading, spacing: 12) {
             detailHeader
+            RaycastQuicklinkRenameHint()
             MonitorCanvas(
                 monitorPixelSize: monitorPixelSize,
                 area: frameBinding,
@@ -128,6 +129,13 @@ struct PresetEditorView: View {
             TextField("Name", text: nameBinding)
                 .textFieldStyle(.roundedBorder)
                 .frame(maxWidth: 280)
+            if let draft {
+                RaycastQuicklinkButton(
+                    name: draft.name,
+                    command: .preset(draft.id),
+                    beforeOpen: saveDraft
+                )
+            }
             Spacer()
             if NSScreen.screens.count > 1 {
                 Picker("Preview on", selection: $monitorIndex) {
