@@ -75,6 +75,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
     private var snapMonitor: DragSnapMonitor?
     private var cancellables = Set<AnyCancellable>()
+    private var isReadyForRaycastCommands = false
+    private var pendingRaycastURLs: [URL] = []
+
+    private lazy var raycastDispatcher = RaycastCommandDispatcher(
+        store: store,
+        registry: hotkeys.registry,
+        accessibility: ax,
+        onError: { [weak self] message in self?.showRaycastError(message) },
+        onMissingAccessibility: { [weak app] in app?.openOnboarding() }
+    )
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         app.store = store
@@ -109,11 +119,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             if !ax.isTrusted { ax.requestPermission() }
         }
 
+        isReadyForRaycastCommands = true
+        let queuedURLs = pendingRaycastURLs
+        pendingRaycastURLs.removeAll()
+        queuedURLs.forEach(handleRaycastURL)
+
         // Check for updates shortly after launch, then every 24h while
         // running (silent: alert only when an update is available).
         DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
             Updater.startAutomaticChecks()
         }
+    }
+
+    func application(_ application: NSApplication, open urls: [URL]) {
+        if isReadyForRaycastCommands {
+            urls.forEach(handleRaycastURL)
+        } else {
+            pendingRaycastURLs.append(contentsOf: urls)
+        }
+    }
+
+    private func handleRaycastURL(_ url: URL) {
+        do {
+            raycastDispatcher.dispatch(try RaycastCommand(url: url))
+        } catch {
+            showRaycastError("올바르지 않은 My Window Manager 링크입니다.")
+        }
+    }
+
+    private func showRaycastError(_ message: String) {
+        let alert = NSAlert()
+        alert.messageText = "Raycast 명령을 실행하지 못했습니다"
+        alert.informativeText = message
+        alert.alertStyle = .warning
+        NSApp.activate(ignoringOtherApps: true)
+        alert.runModal()
     }
 
     /// 이미 실행 중인 앱을 다시 열면(Finder/Dock/`open`) 설정 창을 띄운다.
