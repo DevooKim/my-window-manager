@@ -54,13 +54,16 @@ struct AppConfig: Codable {
 @MainActor
 final class ConfigStore: ObservableObject {
     private var isApplyingConfiguration = false
-    let hotkeyConfigurationDidChange = PassthroughSubject<Void, Never>()
+    private let hotkeyConfigurationDidChangeSubject = PassthroughSubject<Void, Never>()
+    var hotkeyConfigurationDidChange: AnyPublisher<Void, Never> {
+        hotkeyConfigurationDidChangeSubject.eraseToAnyPublisher()
+    }
 
     @Published var presets: [ResizePreset] = [] {
         didSet {
             guard !isApplyingConfiguration else { return }
             if Self.registrations(for: presets) != Self.registrations(for: oldValue) {
-                hotkeyConfigurationDidChange.send()
+                hotkeyConfigurationDidChangeSubject.send()
             }
         }
     }
@@ -68,7 +71,7 @@ final class ConfigStore: ObservableObject {
         didSet {
             guard !isApplyingConfiguration else { return }
             if Self.registrations(for: layouts) != Self.registrations(for: oldValue) {
-                hotkeyConfigurationDidChange.send()
+                hotkeyConfigurationDidChangeSubject.send()
             }
         }
     }
@@ -76,7 +79,7 @@ final class ConfigStore: ObservableObject {
         didSet {
             guard !isApplyingConfiguration else { return }
             if Self.registrations(for: cycles) != Self.registrations(for: oldValue) {
-                hotkeyConfigurationDidChange.send()
+                hotkeyConfigurationDidChangeSubject.send()
             }
         }
     }
@@ -95,7 +98,7 @@ final class ConfigStore: ObservableObject {
             if !isApplyingConfiguration, moveBindings != oldValue { save() }
             if !isApplyingConfiguration,
                Self.registrations(for: moveBindings) != Self.registrations(for: oldValue) {
-                hotkeyConfigurationDidChange.send()
+                hotkeyConfigurationDidChangeSubject.send()
             }
         }
     }
@@ -109,7 +112,7 @@ final class ConfigStore: ObservableObject {
             if !isApplyingConfiguration, sizeBindings != oldValue { save() }
             if !isApplyingConfiguration,
                Self.registrations(for: sizeBindings) != Self.registrations(for: oldValue) {
-                hotkeyConfigurationDidChange.send()
+                hotkeyConfigurationDidChangeSubject.send()
             }
         }
     }
@@ -335,7 +338,7 @@ final class ConfigStore: ObservableObject {
         isApplyingConfiguration = false
         syncDeadzones()
         if previousRegistrations != hotkeyRegistrationState {
-            hotkeyConfigurationDidChange.send()
+            hotkeyConfigurationDidChangeSubject.send()
         }
     }
 
