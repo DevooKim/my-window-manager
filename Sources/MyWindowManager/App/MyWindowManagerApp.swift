@@ -97,13 +97,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         Updater.promptState = updatePrompt
         Updater.openWindow = { [weak app] in app?.openUpdateWindow?() }
 
-        store.objectWillChange
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] in
-                DispatchQueue.main.async { self?.hotkeys.registry.rebuild() }
-            }
-            .store(in: &cancellables)
-
         // 드래그 스냅 — 설정과 접근성 권한 변화에 맞춰 시작/중지.
         snapMonitor = DragSnapMonitor(settings: store.snapSettings)
         store.$snapSettings

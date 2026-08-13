@@ -8,7 +8,6 @@ private enum LaunchTargetKind: String, Hashable {
 struct LayoutEditorView: View {
     @EnvironmentObject var store: ConfigStore
     @EnvironmentObject var catalog: AppCatalog
-    @EnvironmentObject var hotkeys: HotkeyRegistryHolder
 
     @State private var selection: UUID?
     @State private var draft: Layout?
@@ -352,7 +351,6 @@ struct LayoutEditorView: View {
         store.upsert(layout: new)
         selection = new.id
         draft = new
-        hotkeys.registry.rebuild()
     }
 
     private func deleteLayout() {
@@ -360,7 +358,6 @@ struct LayoutEditorView: View {
         store.deleteLayout(id: id)
         selection = store.layouts.first?.id
         draft = store.layouts.first
-        hotkeys.registry.rebuild()
     }
 
     /// Adds a new placement to the current layout on the primary display with a
@@ -384,6 +381,5 @@ struct LayoutEditorView: View {
     private func saveDraft() {
         guard let d = draft else { return }
         store.upsert(layout: d)
-        hotkeys.registry.rebuild()
     }
 }

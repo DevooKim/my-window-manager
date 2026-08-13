@@ -123,8 +123,86 @@ struct ConfigStorePerformanceTests {
         withExtendedLifetime(cancellable) {}
     }
 
+    @Test func importPersistsConfigurationOnce() throws {
+        let targetURL = try temporaryConfigURL()
+        let sourceURL = try temporaryConfigURL()
+        defer {
+            try? FileManager.default.removeItem(at: targetURL.deletingLastPathComponent())
+            try? FileManager.default.removeItem(at: sourceURL.deletingLastPathComponent())
+        }
+        try importedConfigurationData().write(to: sourceURL)
+        var writes = 0
+        let store = ConfigStore(
+            configURL: targetURL,
+            writeConfiguration: { data, url in
+                writes += 1
+                try data.write(to: url, options: .atomic)
+            }
+        )
+
+        try store.importConfig(from: sourceURL)
+
+        #expect(writes == 1)
+    }
+
+    @Test func importPublishesOneHotkeyChange() throws {
+        let targetURL = try temporaryConfigURL()
+        let sourceURL = try temporaryConfigURL()
+        defer {
+            try? FileManager.default.removeItem(at: targetURL.deletingLastPathComponent())
+            try? FileManager.default.removeItem(at: sourceURL.deletingLastPathComponent())
+        }
+        try importedConfigurationData().write(to: sourceURL)
+        let store = ConfigStore(configURL: targetURL)
+        var events = 0
+        let cancellable = store.hotkeyConfigurationDidChange.sink { events += 1 }
+
+        try store.importConfig(from: sourceURL)
+
+        #expect(events == 1)
+        withExtendedLifetime(cancellable) {}
+    }
+
     private var commandHotkey: HotkeyConfig {
         HotkeyConfig(keyCode: 0, modifiers: UInt32(cmdKey))
+    }
+
+    private func importedConfigurationData() throws -> Data {
+        let preset = ResizePreset(
+            name: "Imported Preset",
+            frame: .leftHalf,
+            hotkey: commandHotkey
+        )
+        let layout = Layout(
+            name: "Imported Layout",
+            placements: [],
+            hotkey: HotkeyConfig(keyCode: 1, modifiers: UInt32(cmdKey))
+        )
+        let cycle = PresetCycle(
+            name: "Imported Cycle",
+            presetIds: [preset.id],
+            hotkey: HotkeyConfig(keyCode: 2, modifiers: UInt32(cmdKey))
+        )
+        let config = AppConfig(
+            presets: [preset],
+            layouts: [layout],
+            cycles: [cycle],
+            deadzones: [],
+            moveBindings: [
+                MoveBinding(
+                    action: .displayNext,
+                    hotkey: HotkeyConfig(keyCode: 3, modifiers: UInt32(cmdKey))
+                )
+            ],
+            sizeBindings: [
+                SizeBinding(
+                    action: .grow,
+                    hotkey: HotkeyConfig(keyCode: 4, modifiers: UInt32(cmdKey))
+                )
+            ],
+            sizeStepRatio: 0.2
+        )
+        return try JSONEncoder().encode(config)
     }
 
     private func temporaryConfigURL() throws -> URL {

@@ -4,7 +4,6 @@ import SwiftUI
 /// 창 확대/축소 액션의 핫키 설정.
 struct MoveView: View {
     @EnvironmentObject var store: ConfigStore
-    @EnvironmentObject var hotkeys: HotkeyRegistryHolder
 
     var body: some View {
         Form {
@@ -93,7 +92,6 @@ struct MoveView: View {
                     list.append(MoveBinding(action: action, hotkey: newValue))
                 }
                 store.moveBindings = list
-                hotkeys.registry.rebuild()
             }
         )
     }
@@ -109,7 +107,6 @@ struct MoveView: View {
                     list.append(SizeBinding(action: action, hotkey: newValue))
                 }
                 store.sizeBindings = list
-                hotkeys.registry.rebuild()
             }
         )
     }

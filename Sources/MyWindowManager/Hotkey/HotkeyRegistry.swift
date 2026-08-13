@@ -2,6 +2,7 @@ import Foundation
 import HotKey
 import AppKit
 import ApplicationServices
+import Combine
 
 @MainActor
 final class HotkeyRegistry {
@@ -14,7 +15,9 @@ final class HotkeyRegistry {
     }
 
     private var hotkeys: [(Target, HotKey)] = []
+    var registeredHotkeyCount: Int { hotkeys.count }
     private weak var store: ConfigStore?
+    private var hotkeyConfigurationCancellable: AnyCancellable?
     private let applyPreset: (ResizePreset, AXUIElement?) -> Bool
     private let showCycleHUD: @MainActor (String, [HUDItem], Int, CycleHUDStyle) -> Void
 
@@ -51,6 +54,8 @@ final class HotkeyRegistry {
 
     func bind(store: ConfigStore) {
         self.store = store
+        hotkeyConfigurationCancellable = store.hotkeyConfigurationDidChange
+            .sink { [weak self] in self?.rebuild() }
         rebuild()
     }
 
