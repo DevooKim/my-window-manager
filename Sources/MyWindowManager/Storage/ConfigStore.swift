@@ -54,10 +54,32 @@ struct AppConfig: Codable {
 @MainActor
 final class ConfigStore: ObservableObject {
     private var isApplyingConfiguration = false
+    let hotkeyConfigurationDidChange = PassthroughSubject<Void, Never>()
 
-    @Published var presets: [ResizePreset] = []
-    @Published var layouts: [Layout] = []
-    @Published var cycles: [PresetCycle] = []
+    @Published var presets: [ResizePreset] = [] {
+        didSet {
+            guard !isApplyingConfiguration else { return }
+            if Self.registrations(for: presets) != Self.registrations(for: oldValue) {
+                hotkeyConfigurationDidChange.send()
+            }
+        }
+    }
+    @Published var layouts: [Layout] = [] {
+        didSet {
+            guard !isApplyingConfiguration else { return }
+            if Self.registrations(for: layouts) != Self.registrations(for: oldValue) {
+                hotkeyConfigurationDidChange.send()
+            }
+        }
+    }
+    @Published var cycles: [PresetCycle] = [] {
+        didSet {
+            guard !isApplyingConfiguration else { return }
+            if Self.registrations(for: cycles) != Self.registrations(for: oldValue) {
+                hotkeyConfigurationDidChange.send()
+            }
+        }
+    }
     @Published var deadzones: [DisplayDeadzone] = [] {
         didSet { syncDeadzones() }
     }
@@ -69,6 +91,10 @@ final class ConfigStore: ObservableObject {
     @Published var moveBindings: [MoveBinding] = [] {
         didSet {
             if !isApplyingConfiguration, moveBindings != oldValue { save() }
+            if !isApplyingConfiguration,
+               Self.registrations(for: moveBindings) != Self.registrations(for: oldValue) {
+                hotkeyConfigurationDidChange.send()
+            }
         }
     }
     @Published var snapSettings: SnapSettings = SnapSettings() {
@@ -79,6 +105,10 @@ final class ConfigStore: ObservableObject {
     @Published var sizeBindings: [SizeBinding] = [] {
         didSet {
             if !isApplyingConfiguration, sizeBindings != oldValue { save() }
+            if !isApplyingConfiguration,
+               Self.registrations(for: sizeBindings) != Self.registrations(for: oldValue) {
+                hotkeyConfigurationDidChange.send()
+            }
         }
     }
     /// 창 확대/축소 스텝 — 화면 크기 대비 비율(0.02~0.30).
@@ -100,6 +130,46 @@ final class ConfigStore: ObservableObject {
     @Published private(set) var needsSetup: Bool = false
 
     private let url: URL
+
+    private struct ItemRegistration: Equatable {
+        let id: UUID
+        let hotkey: HotkeyConfig
+    }
+
+    private struct FixedRegistration: Equatable {
+        let action: String
+        let hotkey: HotkeyConfig
+    }
+
+    private static func registrations(for items: [ResizePreset]) -> [ItemRegistration] {
+        items.compactMap { item in
+            item.hotkey.map { ItemRegistration(id: item.id, hotkey: $0) }
+        }
+    }
+
+    private static func registrations(for items: [Layout]) -> [ItemRegistration] {
+        items.compactMap { item in
+            item.hotkey.map { ItemRegistration(id: item.id, hotkey: $0) }
+        }
+    }
+
+    private static func registrations(for items: [PresetCycle]) -> [ItemRegistration] {
+        items.compactMap { item in
+            item.hotkey.map { ItemRegistration(id: item.id, hotkey: $0) }
+        }
+    }
+
+    private static func registrations(for items: [MoveBinding]) -> [FixedRegistration] {
+        items.compactMap { item in
+            item.hotkey.map { FixedRegistration(action: item.action.rawValue, hotkey: $0) }
+        }
+    }
+
+    private static func registrations(for items: [SizeBinding]) -> [FixedRegistration] {
+        items.compactMap { item in
+            item.hotkey.map { FixedRegistration(action: item.action.rawValue, hotkey: $0) }
+        }
+    }
 
     init() {
         let fm = FileManager.default
