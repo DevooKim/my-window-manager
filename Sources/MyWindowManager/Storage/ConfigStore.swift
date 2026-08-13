@@ -53,6 +53,8 @@ struct AppConfig: Codable {
 
 @MainActor
 final class ConfigStore: ObservableObject {
+    private var isApplyingConfiguration = false
+
     @Published var presets: [ResizePreset] = []
     @Published var layouts: [Layout] = []
     @Published var cycles: [PresetCycle] = []
@@ -60,20 +62,30 @@ final class ConfigStore: ObservableObject {
         didSet { syncDeadzones() }
     }
     @Published var cycleHUDStyle: CycleHUDStyle = .thumbnails {
-        didSet { if cycleHUDStyle != oldValue { save() } }
+        didSet {
+            if !isApplyingConfiguration, cycleHUDStyle != oldValue { save() }
+        }
     }
     @Published var moveBindings: [MoveBinding] = [] {
-        didSet { if moveBindings != oldValue { save() } }
+        didSet {
+            if !isApplyingConfiguration, moveBindings != oldValue { save() }
+        }
     }
     @Published var snapSettings: SnapSettings = SnapSettings() {
-        didSet { if snapSettings != oldValue { save() } }
+        didSet {
+            if !isApplyingConfiguration, snapSettings != oldValue { save() }
+        }
     }
     @Published var sizeBindings: [SizeBinding] = [] {
-        didSet { if sizeBindings != oldValue { save() } }
+        didSet {
+            if !isApplyingConfiguration, sizeBindings != oldValue { save() }
+        }
     }
     /// 창 확대/축소 스텝 — 화면 크기 대비 비율(0.02~0.30).
     @Published var sizeStepRatio: Double = 0.1 {
-        didSet { if sizeStepRatio != oldValue { save() } }
+        didSet {
+            if !isApplyingConfiguration, sizeStepRatio != oldValue { save() }
+        }
     }
 
     /// Push the current deadzones into `ScreenHelper` so the appliers see them.
@@ -104,6 +116,9 @@ final class ConfigStore: ObservableObject {
     }
 
     func load() {
+        isApplyingConfiguration = true
+        defer { isApplyingConfiguration = false }
+
         if let data = try? Data(contentsOf: url),
            let cfg = try? JSONDecoder().decode(AppConfig.self, from: data) {
             self.presets = cfg.presets
