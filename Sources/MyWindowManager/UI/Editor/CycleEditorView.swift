@@ -4,7 +4,6 @@ import SwiftUI
 /// that the same key steps through on each press.
 struct CycleEditorView: View {
     @EnvironmentObject var store: ConfigStore
-    @EnvironmentObject var hotkeys: HotkeyRegistryHolder
 
     @State private var selection: UUID?
     @State private var draft: PresetCycle?
@@ -199,7 +198,6 @@ struct CycleEditorView: View {
         store.upsert(cycle: new)
         selection = new.id
         draft = new
-        hotkeys.registry.rebuild()
     }
 
     private func deleteCycle() {
@@ -207,7 +205,6 @@ struct CycleEditorView: View {
         store.deleteCycle(id: id)
         selection = store.cycles.first?.id
         draft = store.cycles.first
-        hotkeys.registry.rebuild()
     }
 
     private func addPreset(_ id: UUID) {
@@ -223,6 +220,5 @@ struct CycleEditorView: View {
     private func saveDraft() {
         guard let d = draft else { return }
         store.upsert(cycle: d)
-        hotkeys.registry.rebuild()
     }
 }

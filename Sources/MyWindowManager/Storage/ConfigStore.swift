@@ -53,27 +53,74 @@ struct AppConfig: Codable {
 
 @MainActor
 final class ConfigStore: ObservableObject {
-    @Published var presets: [ResizePreset] = []
-    @Published var layouts: [Layout] = []
-    @Published var cycles: [PresetCycle] = []
+    private var isApplyingConfiguration = false
+    private let hotkeyConfigurationDidChangeSubject = PassthroughSubject<Void, Never>()
+    var hotkeyConfigurationDidChange: AnyPublisher<Void, Never> {
+        hotkeyConfigurationDidChangeSubject.eraseToAnyPublisher()
+    }
+
+    @Published var presets: [ResizePreset] = [] {
+        didSet {
+            guard !isApplyingConfiguration else { return }
+            if Self.registrations(for: presets) != Self.registrations(for: oldValue) {
+                hotkeyConfigurationDidChangeSubject.send()
+            }
+        }
+    }
+    @Published var layouts: [Layout] = [] {
+        didSet {
+            guard !isApplyingConfiguration else { return }
+            if Self.registrations(for: layouts) != Self.registrations(for: oldValue) {
+                hotkeyConfigurationDidChangeSubject.send()
+            }
+        }
+    }
+    @Published var cycles: [PresetCycle] = [] {
+        didSet {
+            guard !isApplyingConfiguration else { return }
+            if Self.registrations(for: cycles) != Self.registrations(for: oldValue) {
+                hotkeyConfigurationDidChangeSubject.send()
+            }
+        }
+    }
     @Published var deadzones: [DisplayDeadzone] = [] {
-        didSet { syncDeadzones() }
+        didSet {
+            if !isApplyingConfiguration { syncDeadzones() }
+        }
     }
     @Published var cycleHUDStyle: CycleHUDStyle = .thumbnails {
-        didSet { if cycleHUDStyle != oldValue { save() } }
+        didSet {
+            if !isApplyingConfiguration, cycleHUDStyle != oldValue { save() }
+        }
     }
     @Published var moveBindings: [MoveBinding] = [] {
-        didSet { if moveBindings != oldValue { save() } }
+        didSet {
+            if !isApplyingConfiguration, moveBindings != oldValue { save() }
+            if !isApplyingConfiguration,
+               Self.registrations(for: moveBindings) != Self.registrations(for: oldValue) {
+                hotkeyConfigurationDidChangeSubject.send()
+            }
+        }
     }
     @Published var snapSettings: SnapSettings = SnapSettings() {
-        didSet { if snapSettings != oldValue { save() } }
+        didSet {
+            if !isApplyingConfiguration, snapSettings != oldValue { save() }
+        }
     }
     @Published var sizeBindings: [SizeBinding] = [] {
-        didSet { if sizeBindings != oldValue { save() } }
+        didSet {
+            if !isApplyingConfiguration, sizeBindings != oldValue { save() }
+            if !isApplyingConfiguration,
+               Self.registrations(for: sizeBindings) != Self.registrations(for: oldValue) {
+                hotkeyConfigurationDidChangeSubject.send()
+            }
+        }
     }
     /// 창 확대/축소 스텝 — 화면 크기 대비 비율(0.02~0.30).
     @Published var sizeStepRatio: Double = 0.1 {
-        didSet { if sizeStepRatio != oldValue { save() } }
+        didSet {
+            if !isApplyingConfiguration, sizeStepRatio != oldValue { save() }
+        }
     }
 
     /// Push the current deadzones into `ScreenHelper` so the appliers see them.
@@ -88,6 +135,65 @@ final class ConfigStore: ObservableObject {
     @Published private(set) var needsSetup: Bool = false
 
     private let url: URL
+    private let writeConfiguration: (Data, URL) throws -> Void
+
+    private struct ItemRegistration: Equatable {
+        let id: UUID
+        let hotkey: HotkeyConfig
+    }
+
+    private struct FixedRegistration: Equatable {
+        let action: String
+        let hotkey: HotkeyConfig
+    }
+
+    private struct HotkeyRegistrationState: Equatable {
+        let presets: [ItemRegistration]
+        let layouts: [ItemRegistration]
+        let cycles: [ItemRegistration]
+        let moves: [FixedRegistration]
+        let sizes: [FixedRegistration]
+    }
+
+    private var hotkeyRegistrationState: HotkeyRegistrationState {
+        HotkeyRegistrationState(
+            presets: Self.registrations(for: presets),
+            layouts: Self.registrations(for: layouts),
+            cycles: Self.registrations(for: cycles),
+            moves: Self.registrations(for: moveBindings),
+            sizes: Self.registrations(for: sizeBindings)
+        )
+    }
+
+    private static func registrations(for items: [ResizePreset]) -> [ItemRegistration] {
+        items.compactMap { item in
+            item.hotkey.map { ItemRegistration(id: item.id, hotkey: $0) }
+        }
+    }
+
+    private static func registrations(for items: [Layout]) -> [ItemRegistration] {
+        items.compactMap { item in
+            item.hotkey.map { ItemRegistration(id: item.id, hotkey: $0) }
+        }
+    }
+
+    private static func registrations(for items: [PresetCycle]) -> [ItemRegistration] {
+        items.compactMap { item in
+            item.hotkey.map { ItemRegistration(id: item.id, hotkey: $0) }
+        }
+    }
+
+    private static func registrations(for items: [MoveBinding]) -> [FixedRegistration] {
+        items.compactMap { item in
+            item.hotkey.map { FixedRegistration(action: item.action.rawValue, hotkey: $0) }
+        }
+    }
+
+    private static func registrations(for items: [SizeBinding]) -> [FixedRegistration] {
+        items.compactMap { item in
+            item.hotkey.map { FixedRegistration(action: item.action.rawValue, hotkey: $0) }
+        }
+    }
 
     init() {
         let fm = FileManager.default
@@ -95,40 +201,50 @@ final class ConfigStore: ObservableObject {
         let dir = support.appendingPathComponent("MyWindowManager", isDirectory: true)
         try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
         self.url = dir.appendingPathComponent("config.json")
+        self.writeConfiguration = { data, url in
+            try data.write(to: url, options: .atomic)
+        }
         load()
     }
 
-    init(configURL: URL) {
+    init(
+        configURL: URL,
+        writeConfiguration: @escaping (Data, URL) throws -> Void = { data, url in
+            try data.write(to: url, options: .atomic)
+        }
+    ) {
         self.url = configURL
+        self.writeConfiguration = writeConfiguration
         load()
     }
 
     func load() {
-        if let data = try? Data(contentsOf: url),
-           let cfg = try? JSONDecoder().decode(AppConfig.self, from: data) {
-            self.presets = cfg.presets
-            self.layouts = cfg.layouts
-            self.cycles = cfg.cycles
-            self.deadzones = cfg.deadzones
-            self.cycleHUDStyle = cfg.cycleHUDStyle
-            self.moveBindings = cfg.moveBindings
-            self.snapSettings = cfg.snapSettings
-            self.sizeBindings = cfg.sizeBindings
-            self.sizeStepRatio = cfg.sizeStepRatio
-            self.needsSetup = false
-        } else {
-            // First launch — wait for the user to choose a starter scheme.
-            self.presets = []
-            self.layouts = []
-            self.cycles = []
-            self.deadzones = []
-            self.moveBindings = []
-            self.snapSettings = SnapSettings()
-            self.sizeBindings = []
-            self.sizeStepRatio = 0.1
-            self.needsSetup = true
+        applyAsBatch {
+            if let data = try? Data(contentsOf: url),
+               let cfg = try? JSONDecoder().decode(AppConfig.self, from: data) {
+                self.presets = cfg.presets
+                self.layouts = cfg.layouts
+                self.cycles = cfg.cycles
+                self.deadzones = cfg.deadzones
+                self.cycleHUDStyle = cfg.cycleHUDStyle
+                self.moveBindings = cfg.moveBindings
+                self.snapSettings = cfg.snapSettings
+                self.sizeBindings = cfg.sizeBindings
+                self.sizeStepRatio = cfg.sizeStepRatio
+                self.needsSetup = false
+            } else {
+                // First launch — wait for the user to choose a starter scheme.
+                self.presets = []
+                self.layouts = []
+                self.cycles = []
+                self.deadzones = []
+                self.moveBindings = []
+                self.snapSettings = SnapSettings()
+                self.sizeBindings = []
+                self.sizeStepRatio = 0.1
+                self.needsSetup = true
+            }
         }
-        syncDeadzones()
     }
 
     /// Seed the starter presets for the chosen scheme and persist. Also seeds a
@@ -136,19 +252,21 @@ final class ConfigStore: ObservableObject {
     /// left empty.
     func applyStarterScheme(_ scheme: PresetScheme) {
         let seeded = StarterPresets.presets(for: scheme)
-        presets = seeded
-        layouts = []
+        applyAsBatch {
+            presets = seeded
+            layouts = []
 
-        // Cycle through the four halves, in id order, with no hotkey assigned.
-        let halfNames = ["Left Half", "Right Half", "Top Half", "Bottom Half"]
-        let halfIds = halfNames.compactMap { name in
-            seeded.first { $0.name == name }?.id
+            // Cycle through the four halves, in id order, with no hotkey assigned.
+            let halfNames = ["Left Half", "Right Half", "Top Half", "Bottom Half"]
+            let halfIds = halfNames.compactMap { name in
+                seeded.first { $0.name == name }?.id
+            }
+            cycles = halfIds.isEmpty ? [] : [
+                PresetCycle(name: "Halves", presetIds: halfIds, hotkey: nil)
+            ]
+
+            needsSetup = false
         }
-        cycles = halfIds.isEmpty ? [] : [
-            PresetCycle(name: "Halves", presetIds: halfIds, hotkey: nil)
-        ]
-
-        needsSetup = false
         save()
     }
 
@@ -160,7 +278,7 @@ final class ConfigStore: ObservableObject {
         let enc = JSONEncoder()
         enc.outputFormatting = [.prettyPrinted, .sortedKeys]
         guard let data = try? enc.encode(cfg) else { return }
-        try? data.write(to: url, options: .atomic)
+        try? writeConfiguration(data, url)
     }
 
     // MARK: - Export / Import
@@ -198,17 +316,30 @@ final class ConfigStore: ObservableObject {
         guard let cfg = try? JSONDecoder().decode(AppConfig.self, from: data) else {
             throw ConfigIOError.decodeFailed
         }
-        presets = cfg.presets
-        layouts = cfg.layouts
-        cycles = cfg.cycles
-        deadzones = cfg.deadzones
-        cycleHUDStyle = cfg.cycleHUDStyle
-        moveBindings = cfg.moveBindings
-        snapSettings = cfg.snapSettings
-        sizeBindings = cfg.sizeBindings
-        sizeStepRatio = cfg.sizeStepRatio
-        needsSetup = false
+        applyAsBatch {
+            presets = cfg.presets
+            layouts = cfg.layouts
+            cycles = cfg.cycles
+            deadzones = cfg.deadzones
+            cycleHUDStyle = cfg.cycleHUDStyle
+            moveBindings = cfg.moveBindings
+            snapSettings = cfg.snapSettings
+            sizeBindings = cfg.sizeBindings
+            sizeStepRatio = cfg.sizeStepRatio
+            needsSetup = false
+        }
         save()
+    }
+
+    private func applyAsBatch(_ updates: () -> Void) {
+        let previousRegistrations = hotkeyRegistrationState
+        isApplyingConfiguration = true
+        updates()
+        isApplyingConfiguration = false
+        syncDeadzones()
+        if previousRegistrations != hotkeyRegistrationState {
+            hotkeyConfigurationDidChangeSubject.send()
+        }
     }
 
     func upsert(deadzone: DisplayDeadzone) {

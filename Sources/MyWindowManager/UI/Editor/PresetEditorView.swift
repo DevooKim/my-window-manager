@@ -3,7 +3,6 @@ import AppKit
 
 struct PresetEditorView: View {
     @EnvironmentObject var store: ConfigStore
-    @EnvironmentObject var hotkeys: HotkeyRegistryHolder
     @State private var selection: UUID?
     @State private var draft: ResizePreset?
     @State private var snap: Bool = true
@@ -174,7 +173,6 @@ struct PresetEditorView: View {
         store.upsert(preset: new)
         selection = new.id
         draft = new
-        hotkeys.registry.rebuild()
     }
 
     private func deletePreset() {
@@ -182,13 +180,11 @@ struct PresetEditorView: View {
         store.deletePreset(id: id)
         selection = store.presets.first?.id
         draft = store.presets.first
-        hotkeys.registry.rebuild()
     }
 
     private func saveDraft() {
         guard let d = draft else { return }
         store.upsert(preset: d)
-        hotkeys.registry.rebuild()
     }
 
     /// Whether the draft differs from the saved preset (a brand-new preset

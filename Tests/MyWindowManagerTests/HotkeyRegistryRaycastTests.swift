@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import ApplicationServices
+import Carbon.HIToolbox
 @testable import MyWindowManager
 
 @MainActor
@@ -42,5 +43,22 @@ struct HotkeyRegistryRaycastTests {
         #expect(registry.advanceCycle(id: cycle.id, window: window))
         #expect(attempts == [first.id, second.id, second.id])
         #expect(shownIndexes == [0, 1])
+    }
+
+    @Test func boundRegistryTracksStoreHotkeyChanges() throws {
+        let configURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mwm-registry-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: configURL) }
+        let store = ConfigStore(configURL: configURL)
+        let registry = HotkeyRegistry()
+        registry.bind(store: store)
+        var preset = ResizePreset(name: "Bound", frame: .leftHalf)
+        preset.hotkey = HotkeyConfig(keyCode: 0, modifiers: UInt32(cmdKey))
+
+        #expect(registry.registeredHotkeyCount == 0)
+        store.upsert(preset: preset)
+        #expect(registry.registeredHotkeyCount == 1)
+        store.deletePreset(id: preset.id)
+        #expect(registry.registeredHotkeyCount == 0)
     }
 }

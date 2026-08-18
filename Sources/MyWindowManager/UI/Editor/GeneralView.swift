@@ -6,7 +6,6 @@ import UniformTypeIdentifiers
 /// Uses the grouped Form style shared with My AltTab's settings.
 struct GeneralView: View {
     @EnvironmentObject var store: ConfigStore
-    @EnvironmentObject var hotkeys: HotkeyRegistryHolder
     @AppStorage(AppState.showMenuBarIconKey) private var showMenuBarIcon = true
     @State private var launchAtLogin = LoginItemManager.isEnabled
 
@@ -92,7 +91,6 @@ struct GeneralView: View {
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             try store.importConfig(from: url)
-            hotkeys.registry.rebuild()
         } catch {
             presentError(error, title: "가져오기 실패")
         }
