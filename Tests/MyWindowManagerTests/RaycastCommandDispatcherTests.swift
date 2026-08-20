@@ -46,7 +46,7 @@ struct RaycastCommandDispatcherTests {
         )
         let resolved = RaycastCommandDispatcher.eligibleWindow(
             from: allowed,
-            appBundleIdentifier: "io.goorm.MyWindowManager"
+            appBundleIdentifier: "io.devookim.MyWindowManager"
         )
         #expect(resolved.map { CFEqual($0, window) } == true)
 
@@ -56,11 +56,11 @@ struct RaycastCommandDispatcherTests {
         )
         #expect(RaycastCommandDispatcher.eligibleWindow(
             from: raycast,
-            appBundleIdentifier: "io.goorm.MyWindowManager"
+            appBundleIdentifier: "io.devookim.MyWindowManager"
         ) == nil)
         #expect(RaycastCommandDispatcher.eligibleWindow(
             from: nil,
-            appBundleIdentifier: "io.goorm.MyWindowManager"
+            appBundleIdentifier: "io.devookim.MyWindowManager"
         ) == nil)
     }
 }
